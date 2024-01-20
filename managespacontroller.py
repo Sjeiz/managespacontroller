@@ -55,7 +55,7 @@ def on_connect(client, userdata, flags, rc, other):
 # Callback function when a message is sent
 def on_publish(client,userdata,result):
     #if debug: print("-->MQTT message sent")
-    if debug: print()
+    pass
     return
 
 
@@ -104,19 +104,19 @@ def publish_ha_autodiscovery(config, client):
     return
     
 
-# Function to detect water #and stop all pumps if problem
-def detect_water(config):
-    gpio = "spa_water_level"
-    if debug: print(GPIO.input(config["gpios"][gpio]["pin"]))
-    spa_water_level = "problem" if GPIO.input(config["gpios"][gpio]["pin"])==config["gpios"][gpio]["gpio_off"] else "ok"
-    if debug: print(f"\nChecking water level in spa: {spa_water_level}")
-    
-    # Publish MQTT message about state of the gpio
-    if debug: print(config["gpios"][gpio]["state_topic"])
-    my_sensorvalues.update({"spa_water_level":spa_water_level})
-    client.publish(config["gpios"][gpio]["state_topic"], spa_water_level, qos=2, retain=False)
-    
-    return spa_water_level
+## Function to detect water #and stop all pumps if problem
+#def detect_water(config):
+#    gpio = "spa_water_level"
+#    if debug: print(GPIO.input(config["gpios"][gpio]["pin"]))
+#    spa_water_level = "problem" if GPIO.input(config["gpios"][gpio]["pin"])==config["gpios"][gpio]["gpio_off"] else "ok"
+#    if debug: print(f"\nChecking water level in spa: {spa_water_level}")
+#    
+#    # Publish MQTT message about state of the gpio
+#    if debug: print(config["gpios"][gpio]["state_topic"])
+#    my_sensorvalues.update({"spa_water_level":spa_water_level})
+#    client.publish(config["gpios"][gpio]["state_topic"], spa_water_level, qos=2, retain=False)
+#    
+#    return spa_water_level
 
 
 def get_sensor_or_gpio_value(sensor):
@@ -223,16 +223,16 @@ def process_sensors(publish=True):
         sensor_new_value = get_sensor_or_gpio_value(sensor)
         sensor_current_value = my_sensorvalues[sensor]
         my_sensorvalues.update({sensor:sensor_new_value})
-        if sensor == "spa_status" and sensor_new_value !=  sensor_current_value:
-            # sp_status sensor has changed it's state
-            # Take the appropiate action
-            if sensor_new_value == sensors[sensor]["payload_on"]:
-                # problem is solved. Switch gpios to initial state
-                set_gpio_initial_states()
-            else:
-                # Problem detected! Switch all gpios off.
-                set_gpio_initial_states(alloff=True)
-            quit()
+                
+        if sensor == "spa_status" and sensor_current_value is not None:
+            if sensor_new_value != sensor_current_value:
+                if debug: print(f">>>>>>>> Spa status changed: {sensor_current_value} -> {sensor_new_value}")
+                if sensor_new_value == sensors[sensor]["payload_off"]:
+                    # Problem fixed. Set initial states
+                    set_gpio_initial_states()
+                else:
+                    # Problem detected! Switch all gpios off.
+                    set_gpio_initial_states(alloff=True)
         
         # Send MQTT state message
         if publish: 
@@ -278,8 +278,8 @@ def initialize_gpios():
     for gpio in gpios:
         message = "Initialized: " + gpio + ", pin=" + str(gpios[gpio]["pin"]) + ", direction=" + gpios[gpio]["direction"]
         if gpios[gpio]["direction"] == 'output':
-            message += ", state=" + str(gpios[gpio]["gpio_off"])
             GPIO.setup(gpios[gpio]["pin"], GPIO.OUT)
+            #message += ", state=" + str(gpios[gpio]["gpio_off"])
             #GPIO.output(gpios[gpio]["pin"],gpios[gpio]["gpio_off"])
         else:
             message += ", pull_up_down=" + str(gpios[gpio]["pull_up_down"])
@@ -324,19 +324,20 @@ def process_mqtt_message(target, command):
 
 # Set gpio states
 def set_gpio_initial_states(alloff=False):
-    if debug: print(f"\nSet GPIO initial states. spa_status={my_sensorvalues['spa_status']}, all_off={str(alloff)}")
+    if debug: print(f"\nSet GPIO initial states. spa_status={my_sensorvalues['spa_status']}, alloff={str(alloff)}")
     gpios = config['gpios']
+    sensors = config['sensors']
     
     # Loop through all gpios marked for output
     for gpio in gpios:
                 
         if gpios[gpio]["direction"] == "output":
-            if my_sensorvalues['spa_status'] != "ok" or alloff == True:
-                # spa_status is not ok. Switch gpio off
-                command = "off"
-            else:
+            if (my_sensorvalues['spa_status'] is None and alloff == False) or my_sensorvalues['spa_status'] == sensors['spa_status']['payload_off']:
                 # spa_status = ok. Use the initial state
                 command = gpios[gpio]["initial_state"]
+            else:
+                # spa_status is not ok. Switch gpio off
+                command = "off"
             
             set_and_publish_gpio_state(gpio, command)
     
@@ -346,10 +347,6 @@ def set_gpio_initial_states(alloff=False):
 def set_and_publish_gpio_state(target, command):
     gpio = config["gpios"][target]
     
-    #spa_water_level = detect_water(config)
-    # Change command to off if spa_water_level = problem
-    if my_sensorvalues["spa_water_level"] == "problem": command = "off"
-            
     # Set the target GPIO to the desired state
     gpio_pin   = gpio["pin"]
     gpio_state = gpio["gpio_on"] if command == "on" else gpio["gpio_off"]
@@ -376,12 +373,13 @@ def set_and_publish_gpio_state(target, command):
 ### MAIN ###
 ############
 
-
+def str2bool(v):
+  return v.lower() in ("yes", "true", "t", "1")
+  
 with open(__file__ +".json", "r") as jsonfile:
     config = json.load(jsonfile)
-    if config["mqtt"]["debug"]: print("Configuration read successful")
-
-debug = config["mqtt"]["debug"]
+    debug = str2bool(config["mqtt"]["debug"])
+    if debug: print("Configuration read successful")
 
 
 
@@ -400,7 +398,6 @@ connect_mqtt_broker(client, config['mqtt']['server'], config['mqtt']['port'], co
 
 # Start the MQTT loop to receive messages
 client.loop_start()
-
 
 # Wait for the connection to be established
 while not client.connected_flag:
@@ -425,9 +422,9 @@ set_gpio_initial_states()
 try:
     while True:
         process_sensors(publish=True)
-        if my_sensorvalues["spa_status"] == config["sensors"]["spa_status"]["payload_on"]:
-            # Problem detected! Switch all gpios off.
-            set_gpio_initial_states(alloff=True)
+        #if my_sensorvalues["spa_status"] == config["sensors"]["spa_status"]["payload_on"]:
+        #    # Problem detected! Switch all gpios off.
+        #    set_gpio_initial_states(alloff=True)
         if debug: print(f"\n\n\nSleeping for {config['mqtt']['sleep']} seconds...")
         time.sleep(config['mqtt']['sleep'])
 
