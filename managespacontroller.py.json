@@ -13,8 +13,8 @@
 								"model":"Raspberry Pi 4B Spa Controller",
 								"suggested_area":"Garden"
 							},
-		"sleep"          : 30,
-		"debug"          : "True"
+		"sleep"          : 10,
+		"debug"          : "False"
 	},
 	
 	"gpios": {
@@ -202,7 +202,7 @@
 			"state_topic"  : "spa-controller/spa_status/spa_high_temp",
 			"sensor_type"  : "monitor",
 			"monitor"      : {
-								"spa_temp_1":">22",
+								"spa_temp_1":">23",
 								"spa_temp_2":">40",
 								"spa_temp_3":">40"
 							 },
