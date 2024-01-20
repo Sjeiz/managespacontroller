@@ -1,0 +1,13 @@
+[Unit]
+Description=manage spa controller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=idle
+ExecStart=/usr/bin/python -u /home/SjeizAdmin/python/managespacontroller.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
