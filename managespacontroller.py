@@ -273,9 +273,15 @@ def initialize_gpios():
     for gpio in gpios:
         message = "Initialized: " + gpio + ", pin=" + str(gpios[gpio]["pin"]) + ", direction=" + gpios[gpio]["direction"]
         if gpios[gpio]["direction"] == 'output':
+            #Determine initial_state
+            initial_state = gpios[gpio]["initial_state"]
+            payload_on    = gpios[gpio]["payload_on"]
+            gpio_on       = gpios[gpio]["gpio_on"]
+            gpio_off      = gpios[gpio]["gpio_off"]
+            gpio_state    = gpio_on if initial_state == payload_on else gpio_off
+            message += ", state=" + str(gpios[gpio]["initial_state"])
             GPIO.setup(gpios[gpio]["pin"], GPIO.OUT)
-            #message += ", state=" + str(gpios[gpio]["gpio_off"])
-            #GPIO.output(gpios[gpio]["pin"],gpios[gpio]["gpio_off"])
+            GPIO.output(gpios[gpio]["pin"],gpio_state)
         else:
             message += ", pull_up_down=" + str(gpios[gpio]["pull_up_down"])
             GPIO.setup(gpios[gpio]["pin"], GPIO.IN, pull_up_down=gpios[gpio]["pull_up_down"])
