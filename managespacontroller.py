@@ -298,10 +298,8 @@ def process_mqtt_message(target, command):
         if "conflict" in gpios[target]:
             # Get the conflicting gpio
             conflict_gpio = gpios[target]["conflict"]
-            if command == "on":
+            if command == "on" and my_sensorvalues[conflict_gpio] == gpios[conflict_gpio]["payload_on"]:
                 #Set conflicting gpio to off
-                
-                #conflict_gpio_pin  = gpios[conflict_gpio]["pin"]
                 if debug: print(f"Switching off confliction gpio={conflict_gpio}")
                 set_and_publish_gpio_state(conflict_gpio, "off")
             else:
@@ -325,19 +323,20 @@ def process_mqtt_message(target, command):
 # Set gpio states
 def set_gpio_initial_states(alloff=False):
     if debug: print(f"\nSet GPIO initial states. spa_status={my_sensorvalues['spa_status']}, alloff={str(alloff)}")
-    gpios = config['gpios']
+    gpios   = config['gpios']
     sensors = config['sensors']
-    
+    spa_status    = my_sensorvalues['spa_status']
+    spa_status_ok = sensors['spa_status']['payload_off']
+
     # Loop through all gpios marked for output
     for gpio in gpios:
-                
         if gpios[gpio]["direction"] == "output":
-            if (my_sensorvalues['spa_status'] is None and alloff == False) or my_sensorvalues['spa_status'] == sensors['spa_status']['payload_off']:
+            if spa_status == spa_status_ok and alloff == False:
                 # spa_status = ok. Use the initial state
                 command = gpios[gpio]["initial_state"]
             else:
-                # spa_status is not ok. Switch gpio off
-                command = "off"
+                # spa_status is not ok or alloff = True. Switch gpio off
+                command = gpios[gpio]["payload_off"]
             
             set_and_publish_gpio_state(gpio, command)
     
@@ -346,7 +345,13 @@ def set_gpio_initial_states(alloff=False):
 
 def set_and_publish_gpio_state(target, command):
     gpio = config["gpios"][target]
+    spa_status = my_sensorvalues["spa_status"]
+    spa_status_problem = config["sensors"]["spa_status"]["payload_on"]
     
+    # Change 'on' command to 'off' if spa_status = problem
+    if spa_status == spa_status_problem:
+        command = gpio["payload_off"]
+
     # Set the target GPIO to the desired state
     gpio_pin   = gpio["pin"]
     gpio_state = gpio["gpio_on"] if command == "on" else gpio["gpio_off"]
@@ -364,6 +369,9 @@ def set_and_publish_gpio_state(target, command):
     return
 
 
+def str2bool(v):
+  return v.lower() in ("yes", "true", "t", "1")
+
     
     
     
@@ -373,8 +381,6 @@ def set_and_publish_gpio_state(target, command):
 ### MAIN ###
 ############
 
-def str2bool(v):
-  return v.lower() in ("yes", "true", "t", "1")
   
 with open(__file__ +".json", "r") as jsonfile:
     config = json.load(jsonfile)

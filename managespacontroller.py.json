@@ -14,7 +14,7 @@
 								"suggested_area":"Garden"
 							},
 		"sleep"          : 10,
-		"debug"          : "False"
+		"debug"          : "True"
 	},
 	
 	"gpios": {
