@@ -2,10 +2,14 @@
     "mqtt": {
 		"server"         : "homeassistant.cheizoo.lan",
 		"port"           : 1883,
-		"keepalive"      : 60,
+		"keepalive"      : 10,
 		"user"           : "mosquitto",
 		"password"       : "mosquitto_10T",
+		"qos"            : 1,
 		"subscribe_topic": "spa-controller/+/set",
+		"statustopic"    : "spa-controller/LWT",
+		"statusonline"   : "Online",
+		"statusoffline"  : "Offline",
 		"device"         : {
 								"identifiers": ["spa-controller"],
 								"manufacturer":"Sjeiz",

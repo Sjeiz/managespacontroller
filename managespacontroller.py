@@ -1,5 +1,7 @@
 import RPi.GPIO as GPIO
 import paho.mqtt.client as MQTT
+import paho.mqtt.reasoncodes as reasoncodes
+import paho.mqtt.packettypes as packettypes
 import time
 import os
 import sys
@@ -41,6 +43,8 @@ def on_connect(client, userdata, flags, rc, other):
     if rc == 0:
         if debug: print("Connection success!")
         client.connected_flag=True
+        # Send online message
+        client.publish(config["mqtt"]["statustopic"], payload=config["mqtt"]["statusonline"], qos=config["mqtt"]["qos"], retain=True)
         # Subscribe to messages
         if debug: print("Subscribe to mqtt messages: " + config["mqtt"]["subscribe_topic"])
         client.subscribe(config["mqtt"]["subscribe_topic"])
@@ -50,6 +54,12 @@ def on_connect(client, userdata, flags, rc, other):
         client.connected_flag=False
         if debug: print(f"Connection failed with code {rc}")
     return
+
+
+# Callback function when connection is disconnected gracefully
+def on_disconnect(client, userdata, flags, rc):
+    connected_flag=False
+    if debug: print(f"Disconnected gracefully with code {rc}")
 
         
 # Callback function when a message is sent
@@ -97,27 +107,12 @@ def publish_ha_autodiscovery(config, client):
             if debug: print("Publishing MQTT message to " + devices[device]["config_topic"])
             if debug: print(payload_json)
             #time.sleep(0.5)
-            client.publish(devices[device]["config_topic"], payload=payload_json, qos=2, retain=True)    
+            client.publish(devices[device]["config_topic"], payload=payload_json, qos=config["mqtt"]["qos"], retain=True)    
         
     publish_devices("gpios")
     publish_devices("sensors")
     return
     
-
-## Function to detect water #and stop all pumps if problem
-#def detect_water(config):
-#    gpio = "spa_water_level"
-#    if debug: print(GPIO.input(config["gpios"][gpio]["pin"]))
-#    spa_water_level = "problem" if GPIO.input(config["gpios"][gpio]["pin"])==config["gpios"][gpio]["gpio_off"] else "ok"
-#    if debug: print(f"\nChecking water level in spa: {spa_water_level}")
-#    
-#    # Publish MQTT message about state of the gpio
-#    if debug: print(config["gpios"][gpio]["state_topic"])
-#    my_sensorvalues.update({"spa_water_level":spa_water_level})
-#    client.publish(config["gpios"][gpio]["state_topic"], spa_water_level, qos=2, retain=False)
-#    
-#    return spa_water_level
-
 
 def get_sensor_or_gpio_value(sensor):
     def read_w1sensor_file(device_file):
@@ -236,7 +231,7 @@ def process_sensors(publish=True):
         
         # Send MQTT state message
         if publish: 
-            client.publish(sensors[sensor]["state_topic"], payload=sensor_new_value, qos=2, retain=False)
+            client.publish(sensors[sensor]["state_topic"], payload=sensor_new_value, qos=config["mqtt"]["qos"], retain=False)
            
     # Get all gpio states
     gpios = config["gpios"]
@@ -247,7 +242,7 @@ def process_sensors(publish=True):
         # Send MQTT state message
         my_sensorvalues.update({gpio:gpio_state})
         if publish: 
-            client.publish(gpios[gpio]["state_topic"], payload=gpio_state, qos=2, retain=False)
+            client.publish(gpios[gpio]["state_topic"], payload=gpio_state, qos=config["mqtt"]["qos"], retain=False)
 
     return
 
@@ -366,7 +361,7 @@ def set_and_publish_gpio_state(target, command):
     
     # Publish target GPIO state
     my_sensorvalues.update({target:gpio_state})
-    client.publish(gpio["state_topic"], gpio_state, qos=2, retain=False)
+    client.publish(gpio["state_topic"], gpio_state, qos=config["mqtt"]["qos"], retain=False)
     
     return
 
@@ -395,11 +390,13 @@ with open(__file__ +".json", "r") as jsonfile:
 client = MQTT.Client(protocol=MQTT.MQTTv5)
 client.username_pw_set(username=config['mqtt']['user'], password=config['mqtt']['password'])
 client.connected_flag=False
+client.will_set(config["mqtt"]["statustopic"],config["mqtt"]["statusoffline"],qos=config["mqtt"]["qos"],retain=True)
 
 # Set the callback functions
-client.on_connect = on_connect
-client.on_publish = on_publish
-client.on_message = on_message
+client.on_connect    = on_connect
+client.on_publish    = on_publish
+client.on_message    = on_message
+client.on_disconnect = on_disconnect
 
 # Connect to the broker
 connect_mqtt_broker(client, config['mqtt']['server'], config['mqtt']['port'], config['mqtt']['keepalive'])
@@ -452,5 +449,6 @@ finally:
     # Stop the MQTT loop and disconnect from the MQTT Broker
     if debug: print("\nDisconnect from broker")
     client.loop_stop()
-    client.disconnect()
+    #client.disconnect()
+    client.disconnect(reasoncodes.ReasonCodes(packettypes.PacketTypes.DISCONNECT, "Disconnect", 4))
 
