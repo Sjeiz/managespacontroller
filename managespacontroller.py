@@ -279,6 +279,9 @@ def initialize_gpios():
             gpio_on       = gpios[gpio]["gpio_on"]
             gpio_off      = gpios[gpio]["gpio_off"]
             gpio_state    = gpio_on if initial_state == payload_on else gpio_off
+            #TODO: Hoe kom ik hier achter de spa status??
+            #Kip/ei probleem. om sensors uit te lezen moeten eerst de gpios uitgelezen worden...
+            #spa_status    = sensors["xxx"]
             message += ", state=" + str(gpios[gpio]["initial_state"])
             GPIO.setup(gpios[gpio]["pin"], GPIO.OUT)
             GPIO.output(gpios[gpio]["pin"],gpio_state)
