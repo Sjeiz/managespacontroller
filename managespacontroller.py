@@ -294,7 +294,9 @@ def process_mqtt_message(target, command):
     if debug: print(f"\nProcessing incoming MQTT message: {target}, {command}")
     
     def prevent_conflicts(target, command):
-        # Prevent conflicts (HeatPump and heater both on!
+        # Prevent conflicts (gpios which should not be on together)
+        # Command=on  -> Switch the conflicting gpio off if it is on
+        # Command=off -> Switch the conflicting gpio to initial_state
         if "conflict" in gpios[target]:
             # Get the conflicting gpio
             conflict_gpio = gpios[target]["conflict"]
