@@ -304,16 +304,18 @@ def process_mqtt_message(target, command):
         if "conflict" in gpios[target]:
             # Get the conflicting gpio
             conflict_gpio = gpios[target]["conflict"]
-            if command == "on" and my_sensorvalues[conflict_gpio] == gpios[conflict_gpio]["payload_on"]:
-                #Set conflicting gpio to off
-                if debug: print(f"Switching off confliction gpio={conflict_gpio}")
-                set_and_publish_gpio_state(conflict_gpio, "off")
+            if command == "on":
+                if my_sensorvalues[conflict_gpio] == gpios[conflict_gpio]["payload_on"]:
+                    #Set conflicting gpio to off
+                    if debug: print(f"Switching off confliction gpio={conflict_gpio}")
+                    set_and_publish_gpio_state(conflict_gpio, "off")
             else:
                 #Set the conflicting gpio to the inital_state (if exists)
                 if "initial_state" in gpios[conflict_gpio]:
                     conflict_gpio_initial_state = gpios[conflict_gpio]["initial_state"]
-                    if debug: print(f"Switching confliction gpio to initial state: {conflict_gpio}={conflict_gpio_initial_state}")
-                    set_and_publish_gpio_state(conflict_gpio, conflict_gpio_initial_state)
+                    if my_sensorvalues[conflict_gpio] != conflict_gpio_initial_state:
+                        if debug: print(f"Switching confliction gpio to initial state: {conflict_gpio}={conflict_gpio_initial_state}")
+                        set_and_publish_gpio_state(conflict_gpio, conflict_gpio_initial_state)
         return
     
     gpios = config["gpios"]
