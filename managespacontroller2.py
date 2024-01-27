@@ -389,8 +389,30 @@ def str2bool(v):
 
     
     
+class Sensor:
+    def __init__(self, dictionary):
+        for k, v in dictionary.items():
+            setattr(self, k, v)
+            setattr(self, 'value', 0)
+            setattr(self, 'oldvalue', 0)
+
+    def __get__(self,instance, owner=None):
+        print("returned from descriptor object")
+        return self.value
+    
+    def __set__(self, instance, value):
+        print("set in descriptor object")
+        self.value = value
+    
     
 
+class Gpio:
+    def __init__(self, dictionary):
+        for k, v in dictionary.items():
+            setattr(self, k, v)
+        setattr(self, 'value', None)
+        setattr(self, 'oldvalue', None)
+        
 
 ############
 ### MAIN ###
@@ -403,6 +425,23 @@ with open(__file__ +".json", "r") as jsonfile:
     if debug: print("Configuration read successful")
 
 
+for sensor in config["sensors"]:
+    print(config["sensors"][sensor])
+    exec(f"globals()[sensor] = Sensor(config['sensors'][sensor])")
+
+for gpio in config["gpios"]:
+    print(config["gpios"][gpio])
+    exec(f"globals()[gpio] = Gpio(config['gpios'][gpio])")
+
+
+spa_temp_1.value=100
+spa_temp_1.oldvalue = 90
+
+print(spa_temp_1.oldvalue)
+print(spa_temp_1.value)
+
+
+quit()
 
 # Create MQTT Client instance
 client = MQTT.Client(protocol=MQTT.MQTTv5)
