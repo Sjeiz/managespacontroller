@@ -5,6 +5,7 @@ import paho.mqtt.packettypes as packettypes
 import time
 from datetime import datetime, timedelta
 import os
+import weakref
 import sys
 import json
 
@@ -388,58 +389,158 @@ def str2bool(v):
   return v.lower() in ("yes", "true", "t", "1")
 
     
-    
 class Sensor:
-    def __init__(self, dictionary):
-        for k, v in dictionary.items():
-            setattr(self, k, v)
-            setattr(self, 'value', 0)
-            setattr(self, 'oldvalue', 0)
+    instanceArr = []
+    def __init__(self, config):
+        self.__class__.instanceArr.append(weakref.proxy(self))
+        # Add all attributes from config file
+        for key, value in config.items():
+            if debug: print(f"Initializing Sensor[{config['name']}][{key}] = {value}")
+            setattr(self, key, value)
+        # Add value attributes
+        setattr(self, 'value', 0)
+        setattr(self, 'oldvalue', 0)
 
-    def __get__(self,instance, owner=None):
-        print("returned from descriptor object")
-        return self.value
+    @property
+    def value(self):
+        try:    value = self._value
+        except: value = None
+        return value
+        
     
-    def __set__(self, instance, value):
-        print("set in descriptor object")
-        self.value = value
+    @value.setter
+    def value(self,value): 
+        if debug: print(f"Sensor[{self.name}].set({value})")
+        self._oldvalue = self.value
+        self._value = value
     
     
 
-class Gpio:
-    def __init__(self, dictionary):
-        for k, v in dictionary.items():
-            setattr(self, k, v)
-        setattr(self, 'value', None)
-        setattr(self, 'oldvalue', None)
+class Gpio(object):
+    instanceArr = []
+    def __init__(self, config):
+        self.__class__.instanceArr.append(weakref.proxy(self))
+        # Add all attributes from config file
+        for key, value in config.items():
+            if debug: print(f"Initializing Gpio[{config['name']}][{key}] = {value}")
+            setattr(self, key, value)
+        self._value = None
+        self._oldvalue = None
+        
+    @property
+    def value(self):
+        try:    return self._value
+        except: return None
+    
+    @value.setter
+    def value(self,value): 
+        if debug: print(f"Gpio.set([{self.name}]: {value}")
+        self._oldvalue = self.value
+        self._value = value
+        #xxx
+        GPIO.output(self.pin, value)
+
+    def gpio_init(self):
+        def get_initial_state(self):
+            return self.gpio_on if hasattr(self, 'initial_state') and self.initial_state == 'on' else self.gpio_off
+
+        if self.direction == 'output':
+            GPIO.setup(self.pin, GPIO.OUT)
+            self.switch(self.initial_state)
+        else:
+            if hasattr(self, 'pull_up_down'):
+                match self.pull_up_down:
+                    case "up"  : pull_up_down = GPIO.PUD_UP
+                    case "down": pull_up_down = GPIO.PUD_DOWN
+                    case "off" : pull_up_down = GPIO.PUD_OFF
+                    case _     : pull_up_down = GPIO.PUD_DOWN
+            else: 
+                pull_up_down = GPIO.PUD_DOWN
+            GPIO.setup(self.pin, GPIO.IN, pull_up_down)
+    
+    def switch(self,state):
+        # Check monitors and switch off if one or more monitors have detected a problem (on)
+        for monitor in Monitor.instanceArr:
+            if monitor.value == monitor.payload_on:
+                print(f"Problem detected with {monitor.name}! Switching {self.name} off")
+                GPIO.output(self.pin, self.gpio_off)
+                exit
+            else:
+                GPIO.output(self.pin, self.gpio_on)
+
+    def switch_off(self):
+        GPIO.output(self.pin, self.gpio_off)
+
+
+class Monitor(object):
+    instanceArr = []
+    def __init__(self, config):
+        self.__class__.instanceArr.append(weakref.proxy(self))
+        # Add all attributes from config file
+        for key, value in config.items():
+            if debug: print(f"Initializing Monitor[{config['name']}][{key}] = {value}")
+            setattr(self, key, value)
+        self._value = None
+        self._oldvalue = None
+        
+    @property
+    def value(self):
+        try:    return self._value
+        except: return None
+    
+    @value.setter
+    def value(self,value): 
+        if debug: print(f"Monitor.set([{self.name}]: {value}")
+        self._oldvalue = self.value
+        self._value = value
+
+    
         
 
 ############
 ### MAIN ###
 ############
 
-  
+# Declare global variables
+global debug
+global config
+
+# Load configuration file  
 with open(__file__ +".json", "r") as jsonfile:
     config = json.load(jsonfile)
     debug = str2bool(config["mqtt"]["debug"])
     if debug: print("Configuration read successful")
 
+# Initialize basic sensor and gpio settings
+    # Enable 1 wire temperature sensors
+    os.system('modprobe w1-gpio')
+    os.system('modprobe w1-therm')
 
-for sensor in config["sensors"]:
-    print(config["sensors"][sensor])
-    exec(f"globals()[sensor] = Sensor(config['sensors'][sensor])")
+    # Generic GPIO settings
+    GPIO.setmode(GPIO.BOARD)
+    GPIO.setwarnings(False)
 
-for gpio in config["gpios"]:
-    print(config["gpios"][gpio])
-    exec(f"globals()[gpio] = Gpio(config['gpios'][gpio])")
+# Create object instances
+    # Sensor instances
+    for sensor in config["sensors"]:
+        #print(config["sensors"][sensor])
+        exec(f"globals()[sensor] = Sensor(config['sensors'][sensor])")
+    # Gpio instances
+    for gpio in config["gpios"]:
+        #print(config["gpios"][gpio])
+        exec(f"globals()[gpio] = Gpio(config['gpios'][gpio])")
+        globals()[gpio].gpio_init()
+    #Monitor instances
+    for monitor in config["monitors"]:
+        #print(config["monitors"][monitor])
+        exec(f"globals()[monitor] = Monitor(config['monitors'][monitor])")
+    
 
 
-spa_temp_1.value=100
-spa_temp_1.oldvalue = 90
 
-print(spa_temp_1.oldvalue)
-print(spa_temp_1.value)
-
+# TODO: eerst alle sensoren uitlezen
+spa_status.value=spa_status.payload_on
+spa_heatpump.switch("on")
 
 quit()
 
@@ -464,6 +565,8 @@ client.loop_start()
 # Wait for the connection to be established
 while not client.connected_flag:
     time.sleep(1)
+
+
 
 #initialize sensor/gpio value dictionary
 my_sensorvalues = dict.fromkeys(config["sensors"], None) | dict.fromkeys(config["gpios"], None)

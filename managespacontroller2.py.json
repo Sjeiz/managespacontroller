@@ -159,7 +159,7 @@
             "device_class" : "problem",
             "config_topic" : "homeassistant/binary_sensor/spa-controller/spa_water_level/config",
             "state_topic"  : "spa-controller/spa_status/spa_water_level",
-			"pull_up_down" : 22,
+			"pull_up_down" : "down",
 			"payload_on"   : "problem",
 			"payload_off"  : "ok",
 			"gpio_on"       : 1,
@@ -199,20 +199,34 @@
 			"scale"        : 0.001,
 			"round_digits" : 1,
 			"offset"       : 0
-		},
-		"spa_high_temp": {
-			"name"         : "Spa Status (High Temperature)",
+		}
+	},
+	"monitors": {
+		"spa_stutus_water": {
+			"name": "Spa Status (Water)",
 			"device_class" : "problem",
-			"config_topic" : "homeassistant/binary_sensor/spa-controller/spa_high_temp/config",
-			"state_topic"  : "spa-controller/spa_status/spa_high_temp",
+			"config_topic" : "homeassistant/binary_sensor/spa-controller/spa_status_water/config",
+			"state_topic"  : "spa-controller/spa_status/spa_status_water",
 			"sensor_type"  : "monitor",
 			"monitor"      : {
-								"spa_temp_1":">40",
-								"spa_temp_2":">40",
-								"spa_temp_3":">40",
-								"spa_temp_1":"<4",
-								"spa_temp_2":"<4",
-								"spa_temp_3":"<4"
+				             	"check_01": "gpio, spa_water_level, problem"
+							 },
+			"payload_on"   : "problem",
+			"payload_off"  : "ok"
+		},
+		"spa_status_temp": {
+			"name"         : "Spa Status (Temperature)",
+			"device_class" : "problem",
+			"config_topic" : "homeassistant/binary_sensor/spa-controller/spa_status_temp/config",
+			"state_topic"  : "spa-controller/spa_status/spa_status_temp",
+			"sensor_type"  : "monitor",
+			"monitor"      : {
+								"check_01": "sensor, spa_temp_1, >40",
+								"check_02": "sensor, spa_temp_2, >40",
+								"check_03": "sensor, spa_temp_3, >40",
+								"check_04": "sensor, spa_temp_1, <4",
+								"check_05": "sensor, spa_temp_2, <4",
+								"check_06": "sensor, spa_temp_3, <4"
 							 },
 			"payload_on"   : "problem",
 			"payload_off"  : "ok"
@@ -224,8 +238,8 @@
 			"state_topic"  : "spa-controller/spa_status",
 			"sensor_type"  : "monitor",
 			"monitor"      : {
-								"spa_high_temp"  : "problem",
-								"spa_water_level": "problem"
+								"check_01": "monitor, spa_status_water, problem",
+								"check_02": "monitor, spa_status_temp,  problem"
 							 },
 			"payload_on"   : "problem",
 			"payload_off"  : "ok"
