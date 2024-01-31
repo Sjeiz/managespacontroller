@@ -202,7 +202,7 @@
 		}
 	},
 	"monitors": {
-		"spa_stutus_water": {
+		"spa_status_water": {
 			"name": "Spa Status (Water)",
 			"device_class" : "problem",
 			"config_topic" : "homeassistant/binary_sensor/spa-controller/spa_status_water/config",
