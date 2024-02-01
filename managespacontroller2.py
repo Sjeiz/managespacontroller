@@ -645,7 +645,7 @@ for monitor in config["monitors"]:
     
     
     
-e inspringen na een comment!quit()
+quit()
 
 
 # TODO: eerst alle sensoren uitlezen voordat er (initial) states worden gezet, of bouw het in de set function, maar dan worden states wel heel vaak uitgelezen?
