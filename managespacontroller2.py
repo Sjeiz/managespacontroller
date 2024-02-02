@@ -415,11 +415,11 @@ class Gpio(object):
 
 
     @value.setter
-    def value(self,value): 
-        if debug: print(f"Sensor[{self.name}].set({value})")
-        publish_value = self.payload_on if value == self.gpio_on else self.payload_off
-        client.publish(self.state_topic, publish_value)
-        self._value = value
+    def value(self,value):
+        if self._value != value:
+            if debug: print(f"Gpio[{self.name}].set(old={self._value}, new={value})")
+            client.publish(self.state_topic, value)
+            self._value = value
         
 
     def set_io(self):
@@ -440,20 +440,14 @@ class Gpio(object):
                 pull_up_down = GPIO.PUD_DOWN
             GPIO.setup(self.pin, GPIO.IN, pull_up_down)
     
-    def switch(self,state):
-        # # Check monitors and switch off if one or more monitors have detected a problem (on)
-        # for monitor in Monitor.instanceArr:
-        #     if monitor.value == monitor.payload_on:
-        #         print(f"Problem detected with {monitor.name}! Switching {self.name} off")
-        #         GPIO.output(self.pin, self.gpio_off)
-        #         exit
-        #     else:
-        #         #TODO: klopt nog niet
-        #         GPIO.output(self.pin, self.gpio_on)
-        pass
-
+    
     def read(self):
         self.value = self.payload_on if GPIO.input(self.pin) == self.gpio_on else self.payload_off
+
+    
+    def publish(self):
+        if debug: print(f"Gpio[{self.name}].set({self._value})")
+        client.publish(self.state_topic, self._value)
         
 
 
@@ -483,11 +477,11 @@ class Sensor(object):
 
 
     @value.setter
-    def value(self,value): 
-        if debug: print(f"Sensor[{self.name}].set({value})")
-        #publish_value = self.payload_on if value == self.gpio_on else self.payload_off
-        client.publish(self.state_topic, value)
-        self._value = value
+    def value(self,value):
+        if self._value is None or self._value+0.1 < value or value < self._value-0.1: #TODO: gebruik digits voor afronding uit config file
+            if debug: print(f"Sensor[{self.name}].set(old={self._value}, new={value})")
+            client.publish(self.state_topic, value)
+            self._value = value
 
     
     def read(self):
@@ -522,6 +516,10 @@ class Sensor(object):
         match self.sensor_type:
             case "w1sensor":
                 self.value = get_w1sensor_value(sensor)
+    
+    def publish(self):
+        if debug: print(f"Sensor[{self.name}].set({self._value})")
+        client.publish(self.state_topic, self._value)
             
 
 
@@ -552,9 +550,12 @@ class Monitor(object):
         return self._value
     
     @value.setter
-    def value(self,value): 
-        if debug: print(f"Monitor.set([{self.name}]: {value}")
-        self._value = value
+    def value(self,value):
+        if self._value != value:
+            if debug: print(f"Monitor[{self.name}].set(old={self._value}, new={value})")
+            client.publish(self.state_topic, value)
+            self._value = value
+            pass
 
     def read(self):
         status = self.payload_off
@@ -579,7 +580,12 @@ class Monitor(object):
             
             if status == self.payload_on: break # At least one problem found, exit loop        
         
-        self.value = status    
+        self.value = status
+
+    def publish(self):
+        if debug: print(f"Monitor[{self.name}].set({self._value})")
+        client.publish(self.state_topic, self._value)
+
 
 
 
@@ -680,11 +686,24 @@ for monitor in Monitor.instanceArr:
     monitor.read()
     if monitor.value == monitor.payload_on: problem_detected = True
 
+republished_on = datetime.min
+
 try:
     while True:
+        # Get values, publish if value has changed
         for gpio    in Gpio.instanceArr    : gpio.read()
         for sensor  in Sensor.instanceArr  : sensor.read()
         for monitor in Monitor.instanceArr : monitor.read()
+        
+        if datetime.now() > republished_on + timedelta(seconds=30):
+            # Timer has elapsed. Republish all states/values
+            republished_on = datetime.now()
+            if debug: print("\nTimer has elapsed. Republishing all states")
+            for gpio    in Gpio.instanceArr    : gpio.publish()
+            for sensor  in Sensor.instanceArr  : sensor.publish()
+            for monitor in Monitor.instanceArr : monitor.read()
+            
+
         time.sleep(config['mqtt']['sleep'])
 
 except KeyboardInterrupt:
