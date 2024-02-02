@@ -209,7 +209,7 @@
 			"state_topic"  : "spa-controller/spa_status/spa_status_water",
 			"sensor_type"  : "monitor",
 			"monitor"      : {
-				             	"check_01": "gpio, spa_water_level, problem"
+				             	"check_01": "spa_water_level"
 							 },
 			"payload_on"   : "problem",
 			"payload_off"  : "ok"
@@ -221,12 +221,12 @@
 			"state_topic"  : "spa-controller/spa_status/spa_status_temp",
 			"sensor_type"  : "monitor",
 			"monitor"      : {
-								"check_01": "sensor, spa_temp_1, >40",
-								"check_02": "sensor, spa_temp_2, >40",
-								"check_03": "sensor, spa_temp_3, >40",
-								"check_04": "sensor, spa_temp_1, <4",
-								"check_05": "sensor, spa_temp_2, <4",
-								"check_06": "sensor, spa_temp_3, <4"
+								"check_01": "spa_temp_1, >40",
+								"check_02": "spa_temp_2, >40",
+								"check_03": "spa_temp_3, >40",
+								"check_04": "spa_temp_1, <4",
+								"check_05": "spa_temp_2, <4",
+								"check_06": "spa_temp_3, <4"
 							 },
 			"payload_on"   : "problem",
 			"payload_off"  : "ok"
@@ -238,8 +238,8 @@
 			"state_topic"  : "spa-controller/spa_status",
 			"sensor_type"  : "monitor",
 			"monitor"      : {
-								"check_01": "monitor, spa_status_water, problem",
-								"check_02": "monitor, spa_status_temp,  problem"
+								"check_01": "spa_status_water",
+								"check_02": "spa_status_temp"
 							 },
 			"payload_on"   : "problem",
 			"payload_off"  : "ok"

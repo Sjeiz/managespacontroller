@@ -128,7 +128,7 @@ def get_sensor_or_gpio_value(sensor):
         w1sensor_value=""
         while lines[0].strip()[-3:] != 'YES':
             time.sleep(0.2)
-            lines = read_temp_raw()
+            lines = read_w1sensor_file()
         equals_pos = lines[1].find('t=')
         if equals_pos != -1:
             w1sensor_value = (lines[1][equals_pos+2:]).strip()
@@ -390,26 +390,44 @@ def str2bool(v):
 
 
 class Gpio(object):
-    instanceArr = []
+    instanceArr = [] # This create a list with all instances of this class
+    
     def __init__(self, unique_id, config):
-        # Welk comment hiero?
+        # Add this instance to instanceArr
         self.__class__.instanceArr.append(weakref.proxy(self))
+        
         # Add all attributes from config file
-        setattr(self, "unique_id", unique_id)
         for key, value in config.items():
             if debug: print(f"Initializing Gpio[{config['name']}][{key}] = {value}")
             setattr(self, key, value)
-        # Add value attributes
-        setattr(self, 'value', 0)
-        setattr(self, 'oldvalue', 0)
+        
+        # Add additional attributes
+        self.unique_id = unique_id
+        self._value = None
 
-    def gpio_init(self):
+
+    @property
+    def value(self):
+        try:    value = self._value
+        except: value = None
+        return value
+
+
+    @value.setter
+    def value(self,value): 
+        if debug: print(f"Sensor[{self.name}].set({value})")
+        publish_value = self.payload_on if value == self.gpio_on else self.payload_off
+        client.publish(self.state_topic, publish_value)
+        self._value = value
+        
+
+    def set_io(self):
         def get_initial_state(self):
             return self.gpio_on if hasattr(self, 'initial_state') and self.initial_state == 'on' else self.gpio_off
 
         if self.direction == 'output':
             GPIO.setup(self.pin, GPIO.OUT)
-            self.switch(self.initial_state)
+            #self.switch(self.initial_state)
         else:
             if hasattr(self, 'pull_up_down'):
                 match self.pull_up_down:
@@ -433,48 +451,26 @@ class Gpio(object):
         #         GPIO.output(self.pin, self.gpio_on)
         pass
 
-    def publish_ha_discovery_info(self):
-        if hasattr(self, "config_topic"):
-            # Build device message
-            device_dict = {"device": config["mqtt"]["device"],} 
-            
-            # Build payload message
-            payload_dict = {
-                "device_class": self.device_class,
-                "name": self.name,
-                "state_topic": self.state_topic,
-                "unique_id": self.unique_id
-            }
-            if hasattr(self, "command_topic"): payload_dict.update({"command_topic": self.command_topic})
-            if hasattr(self, "payload_off"): payload_dict.update({"payload_off": self.payload_off})
-            if hasattr(self, "payload_on"): payload_dict.update({"payload_on": self.payload_on})
-
-            # Merge device_dict and payload_dict
-            device_dict.update(payload_dict)
-
-            # Convert to JSON
-            payload_json = json.dumps(device_dict)
-            
-            # Publish discovery message to MQTT
-            if debug: print("Publishing MQTT message to " + self.config_topic)
-            if debug: print(payload_json)
-            #time.sleep(0.5)
-            client.publish(self.config_topic, payload=payload_json, qos=config["mqtt"]["qos"], retain=True)
+    def read_and_publish(self):
+        self.value = self.payload_on if GPIO.input(self.pin) == self.gpio_on else self.payload_off
+        
 
 
 class Sensor(object):
-    instanceArr = []
+    instanceArr = [] # This create a list with all instances of this class
+    
     def __init__(self, unique_id, config):
-        # Welk comment hiero?
+        # Add this instance to instanceArr
         self.__class__.instanceArr.append(weakref.proxy(self))
+        
         # Add all attributes from config file
-        setattr(self, "unique_id", unique_id)
         for key, value in config.items():
             if debug: print(f"Initializing Sensor[{config['name']}][{key}] = {value}")
             setattr(self, key, value)
-        # Add value attributes
-        setattr(self, 'value', 0)
-        setattr(self, 'oldvalue', 0)
+        
+        # Add additional attributes
+        self.unique_id = unique_id
+        self._value = None
 
 
     @property
@@ -487,50 +483,65 @@ class Sensor(object):
     @value.setter
     def value(self,value): 
         if debug: print(f"Sensor[{self.name}].set({value})")
-        self._oldvalue = self.value
+        #publish_value = self.payload_on if value == self.gpio_on else self.payload_off
+        client.publish(self.state_topic, value)
         self._value = value
 
+    
+    def read_and_publish(self):
+        def read_w1sensor_file(device_file):
+            f = open(device_file, 'r')
+            lines = f.readlines()
+            f.close()
+            return lines
 
-    def publish_ha_discovery_info(self):
-        if hasattr(self, "config_topic"):
-            # Build device message
-            device_dict = {"device": config["mqtt"]["device"],} 
+        def get_w1sensor_value(sensor):
+            value = 0
+            try:
+                lines = read_w1sensor_file(sensor.filename)
+                while lines[0].strip()[-3:] != 'YES':
+                    time.sleep(0.2)
+                    lines = read_w1sensor_file()
+                equals_pos = lines[1].find('t=')
+                if equals_pos != -1:
+                    value = (lines[1][equals_pos+2:]).strip()
+                    if value.isnumeric():
+                        value = float(value)
+                        if hasattr(sensor,'scale')        : value = value * sensor.scale
+                        if hasattr(sensor,'offset')       : value += sensor.offset
+                        if hasattr(sensor,'round_digits') : value = round(value, sensor.round_digits)
             
-            # Build payload message
-            payload_dict = {
-                "device_class": self.device_class,
-                "name": self.name,
-                "state_topic": self.state_topic,
-                "unique_id": self.unique_id
-            }
-            if hasattr(self, "command_topic"): payload_dict.update({"command_topic": self.command_topic})
-            if hasattr(self, "payload_off"): payload_dict.update({"payload_off": self.payload_off})
-            if hasattr(self, "payload_on"): payload_dict.update({"payload_on": self.payload_on})
+            except Exception as error:
+                    if debug: print(f"ERROR: Sensor {sensor.name} not found!")
+                    if debug: print(error)
+                    value = 0
+            finally:
+                return value
 
-            # Merge device_dict and payload_dict
-            device_dict.update(payload_dict)
-
-            # Convert to JSON
-            payload_json = json.dumps(device_dict)
+        match self.sensor_type:
+            case "w1sensor":
+                self.value = get_w1sensor_value(sensor)
             
-            # Publish discovery message to MQTT
-            if debug: print("Publishing MQTT message to " + self.config_topic)
-            if debug: print(payload_json)
-            client.publish(self.config_topic, payload=payload_json, qos=config["mqtt"]["qos"], retain=True)
+
+
 
 
 class Monitor(object):
-    instanceArr = []
+    instanceArr = [] # This create a list with all instances of this class
+    
     def __init__(self, unique_id, config):
-        # Welk comment hier?
+        # Add this instance to instanceArr
         self.__class__.instanceArr.append(weakref.proxy(self))
+        
         # Add all attributes from config file
-        setattr(self, "unique_id", unique_id)
         for key, value in config.items():
-            if debug: print(f"Initializing Gpio[{config['name']}][{key}] = {value}")
+            if debug: print(f"Initializing Monitor[{config['name']}][{key}] = {value}")
             setattr(self, key, value)
+        
+        # Add additional attributes
+        self.unique_id = unique_id
         self._value = None
-        self._oldvalue = None
+
         
     @property
     def value(self):
@@ -540,36 +551,61 @@ class Monitor(object):
     @value.setter
     def value(self,value): 
         if debug: print(f"Monitor.set([{self.name}]: {value}")
-        self._oldvalue = self.value
         self._value = value
 
-
-    def publish_ha_discovery_info(self):
-        if hasattr(self, "config_topic"):
-            # Build device message
-            device_dict = {"device": config["mqtt"]["device"],} 
+    def read_and_publish(self):
+        status = self.payload_off
+        for key, value in self.monitor.items():
+            check2perform = value.split(',')
+            sensor2check  = globals()[check2perform[0].strip()]
+            if len(check2perform) == 1:
+                # Simple state check required
+                if sensor2check.value == sensor2check.payload_on: status = self.payload_on
+            else:
+                # We need to check the value indicated
+                value2check   = check2perform[1].strip()
+                match value2check[:1]: #check first character
+                    case '<':
+                        if sensor2check.value <  int(value2check[1:]): status = self.payload_on
+                    case '>':
+                        if sensor2check.value >  int(value2check[1:]): status = self.payload_on
+                    case '=':
+                        if sensor2check.value == int(value2check[1:]): status = self.payload_on
+                    case '!':
+                        if sensor2check.value != int(value2check[1:]): status = self.payload_on
             
-            # Build payload message
-            payload_dict = {
-                "device_class": self.device_class,
-                "name": self.name,
-                "state_topic": self.state_topic,
-                "unique_id": self.unique_id
-            }
-            if hasattr(self, "command_topic"): payload_dict.update({"command_topic": self.command_topic})
-            if hasattr(self, "payload_off"): payload_dict.update({"payload_off": self.payload_off})
-            if hasattr(self, "payload_on"): payload_dict.update({"payload_on": self.payload_on})
+            if status == self.payload_on: break # At least one problem found, exit loop        
+        
+        self.value = status    
 
-            # Merge device_dict and payload_dict
-            device_dict.update(payload_dict)
 
-            # Convert to JSON
-            payload_json = json.dumps(device_dict)
-            
-            # Publish discovery message to MQTT
-            if debug: print("Publishing MQTT message to " + self.config_topic)
-            if debug: print(payload_json)
-            client.publish(self.config_topic, payload=payload_json, qos=config["mqtt"]["qos"], retain=True)
+
+def publish_ha_discovery_info(entry):
+    if hasattr(entry, "config_topic"):
+        # Build device message
+        device_dict = {"device": config["mqtt"]["device"],} 
+        
+        # Build payload message
+        payload_dict = {
+            "device_class": entry.device_class,
+            "name": entry.name,
+            "state_topic": entry.state_topic,
+            "unique_id": entry.unique_id
+        }
+        if hasattr(entry, "command_topic") : payload_dict.update({"command_topic": entry.command_topic})
+        if hasattr(entry, "payload_off")   : payload_dict.update({"payload_off": entry.payload_off})
+        if hasattr(entry, "payload_on")    : payload_dict.update({"payload_on": entry.payload_on})
+
+        # Merge device_dict and payload_dict
+        device_dict.update(payload_dict)
+
+        # Convert to JSON
+        payload_json = json.dumps(device_dict)
+        
+        # Publish discovery message to MQTT
+        if debug: print("Publishing MQTT message to " + entry.config_topic)
+        if debug: print(payload_json)
+        client.publish(entry.config_topic, payload=payload_json, qos=config["mqtt"]["qos"], retain=True)
 
 
 
@@ -623,27 +659,23 @@ GPIO.setmode(GPIO.BOARD)
 GPIO.setwarnings(False)
 
 # Create object instances
-# Gpio instances
-for gpio in config["gpios"]:
-    #print(config["gpios"][gpio])|
-    exec(f"globals()[gpio] = Gpio(gpio, config['gpios'][gpio])")
-    globals()[gpio].publish_ha_discovery_info()
-    globals()[gpio].gpio_init()
-    pass
+for gpio    in config["gpios"]     : exec(f"globals()[gpio]    = Gpio(gpio, config['gpios'][gpio])")
+for sensor  in config["sensors"]   : exec(f"globals()[sensor]  = Sensor(sensor, config['sensors'][sensor])")
+for monitor in config["monitors"]  : exec(f"globals()[monitor] = Monitor(monitor, config['monitors'][monitor])")
 
-# Sensor instances
-for sensor in config["sensors"]:
-    #print(config["sensors"][sensor])
-    exec(f"globals()[sensor] = Sensor(sensor, config['sensors'][sensor])")
-    globals()[sensor].publish_ha_discovery_info()
+#Initialize gpios input/output
+for gpio    in Gpio.instanceArr    : gpio.set_io()
 
-#Monitor instances
-for monitor in config["monitors"]:
-    #print(config["monitors"][monitor])
-    exec(f"globals()[monitor] = Monitor(monitor, config['monitors'][monitor])")
-    globals()[monitor].publish_ha_discovery_info()
-    
-    
+# Publish HA autodiscovery information
+for gpio    in Gpio.instanceArr    : publish_ha_discovery_info(gpio)
+for sensor  in Sensor.instanceArr  : publish_ha_discovery_info(sensor)
+for monitor in Monitor.instanceArr : publish_ha_discovery_info(monitor)
+
+# Get readings and publish state to MQTT
+for gpio    in Gpio.instanceArr    : gpio.read_and_publish()
+for sensor  in Sensor.instanceArr  : sensor.read_and_publish()
+for monitor in Monitor.instanceArr : monitor.read_and_publish()
+
     
 quit()
 
