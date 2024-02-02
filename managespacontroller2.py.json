@@ -223,10 +223,7 @@
 			"monitor"      : {
 								"check_01": "spa_temp_1, >40",
 								"check_02": "spa_temp_2, >40",
-								"check_03": "spa_temp_3, >40",
-								"check_04": "spa_temp_1, <4",
-								"check_05": "spa_temp_2, <4",
-								"check_06": "spa_temp_3, <4"
+								"check_03": "spa_temp_3, >40"
 							 },
 			"payload_on"   : "problem",
 			"payload_off"  : "ok"

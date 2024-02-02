@@ -66,7 +66,7 @@ def on_disconnect(client, userdata, flags, rc):
         
 # Callback function when a message is sent
 def on_publish(client,userdata,result):
-    if debug: print("-->MQTT message sent")
+    #if debug: print("-->MQTT message sent")
     pass
     return
 
@@ -408,9 +408,10 @@ class Gpio(object):
 
     @property
     def value(self):
-        try:    value = self._value
-        except: value = None
-        return value
+        if self._value == None: 
+            # No value available yet, get it!
+            self.read()
+        return self._value
 
 
     @value.setter
@@ -451,7 +452,7 @@ class Gpio(object):
         #         GPIO.output(self.pin, self.gpio_on)
         pass
 
-    def read_and_publish(self):
+    def read(self):
         self.value = self.payload_on if GPIO.input(self.pin) == self.gpio_on else self.payload_off
         
 
@@ -475,9 +476,10 @@ class Sensor(object):
 
     @property
     def value(self):
-        try:    value = self._value
-        except: value = None
-        return value
+        if self._value == None: 
+            # No value available yet, get it!
+            self.read()
+        return self._value
 
 
     @value.setter
@@ -488,7 +490,7 @@ class Sensor(object):
         self._value = value
 
     
-    def read_and_publish(self):
+    def read(self):
         def read_w1sensor_file(device_file):
             f = open(device_file, 'r')
             lines = f.readlines()
@@ -512,8 +514,7 @@ class Sensor(object):
                         if hasattr(sensor,'round_digits') : value = round(value, sensor.round_digits)
             
             except Exception as error:
-                    if debug: print(f"ERROR: Sensor {sensor.name} not found!")
-                    if debug: print(error)
+                    if debug: print(f"Sensor[{sensor.name}]: {error}!")
                     value = 0
             finally:
                 return value
@@ -545,15 +546,17 @@ class Monitor(object):
         
     @property
     def value(self):
-        try:    return self._value
-        except: return None
+        if self._value == None: 
+            # No value available yet, get it!
+            self.read()
+        return self._value
     
     @value.setter
     def value(self,value): 
         if debug: print(f"Monitor.set([{self.name}]: {value}")
         self._value = value
 
-    def read_and_publish(self):
+    def read(self):
         status = self.payload_off
         for key, value in self.monitor.items():
             check2perform = value.split(',')
@@ -671,55 +674,17 @@ for gpio    in Gpio.instanceArr    : publish_ha_discovery_info(gpio)
 for sensor  in Sensor.instanceArr  : publish_ha_discovery_info(sensor)
 for monitor in Monitor.instanceArr : publish_ha_discovery_info(monitor)
 
-# Get readings and publish state to MQTT
-for gpio    in Gpio.instanceArr    : gpio.read_and_publish()
-for sensor  in Sensor.instanceArr  : sensor.read_and_publish()
-for monitor in Monitor.instanceArr : monitor.read_and_publish()
-
-    
-quit()
-
-
-# TODO: eerst alle sensoren uitlezen voordat er (initial) states worden gezet, of bouw het in de set function, maar dan worden states wel heel vaak uitgelezen?
-spa_status.value=spa_status.payload_on
-spa_heatpump.switch("on")
-
-quit()
-
-
-
-
-
-#initialize sensor/gpio value dictionary
-my_sensorvalues = dict.fromkeys(config["sensors"], None) | dict.fromkeys(config["gpios"], None)
-
-# Initialize RPi.GPIO ports
-initialize_gpios()
-
-# Initialize sensor and gpio values in dictionary
-if debug: print("\nInitializing sensor values")
-process_sensors(publish=False)
-
-# Set initial gpio states
-set_gpio_initial_states()
-
-# Set time of laast republish all
-republished_on = datetime.now()
-republish_minutes = config["mqtt"]["republish_min"]
-
+# Get monitor readings. This will automatically update underlying sensors
+problem_detected = False
+for monitor in Monitor.instanceArr: 
+    monitor.read()
+    if monitor.value == monitor.payload_on: problem_detected = True
 
 try:
     while True:
-        process_sensors(publish=True)
-        #if my_sensorvalues["spa_status"] == config["sensors"]["spa_status"]["payload_on"]:
-        #    # Problem detected! Switch all gpios off.
-        #    set_gpio_initial_states(alloff=True)
-        if republished_on + timedelta(minutes=republish_minutes) < datetime.now():
-            #Time to republish all sensors
-            if debug: print(">>>>>> Time to republish all sensors")
-            republished_on = datetime.now()
-            process_sensors(republish=True)
-        if debug: print(f"\n\n\nSleeping for {config['mqtt']['sleep']} seconds...")
+        for gpio    in Gpio.instanceArr    : gpio.read()
+        for sensor  in Sensor.instanceArr  : sensor.read()
+        for monitor in Monitor.instanceArr : monitor.read()
         time.sleep(config['mqtt']['sleep'])
 
 except KeyboardInterrupt:
@@ -733,11 +698,10 @@ except KeyboardInterrupt:
     
 finally:
     # Revert to initial gpio states before quitting
-    set_gpio_initial_states()
+    #set_gpio_initial_states()
     
     # Stop the MQTT loop and disconnect from the MQTT Broker
     if debug: print("\nDisconnect from broker")
     client.loop_stop()
     #client.disconnect()
     client.disconnect(reasoncodes.ReasonCodes(packettypes.PacketTypes.DISCONNECT, "Disconnect", 4))
-
