@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=idle
-ExecStart=/usr/bin/python -u /home/SjeizAdmin/python/managespacontroller/managespacontroller.py
+ExecStart=/usr/bin/python -u /home/SjeizAdmin/python/managespacontroller/managespacontroller/managespacontroller.py
 Restart=on-failure
 RestartSec=5
 
