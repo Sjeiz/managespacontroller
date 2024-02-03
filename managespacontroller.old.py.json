@@ -18,7 +18,7 @@
 								"suggested_area":"Garden"
 							},
 		"sleep"          : 1,
-		"republish_sec"  : 10,
+		"republish_min"  : 1,
 		"debug"          : "True"
 	},
 	
@@ -153,13 +153,13 @@
 			"gpio_off"      : 1
         },
 		"spa_water_level": {
-            "name"          : "Spa Water Level",
+            "name"          : "Spa Status (Water Level)",
             "direction"     : "input",
             "pin"           : 23,
             "device_class" : "problem",
             "config_topic" : "homeassistant/binary_sensor/spa-controller/spa_water_level/config",
-            "state_topic"  : "spa-controller/spa_water_level",
-			"pull_up_down" : "up",
+            "state_topic"  : "spa-controller/spa_status/spa_water_level",
+			"pull_up_down" : 22,
 			"payload_on"   : "problem",
 			"payload_off"  : "ok",
 			"gpio_on"       : 1,
@@ -199,29 +199,20 @@
 			"scale"        : 0.001,
 			"round_digits" : 1,
 			"offset"       : 0
-		}
-	},
-	"monitors": {
-		"spa_status_water": {
-			"name": "Spa Status (Water)",
-			"device_class" : "problem",
-			"config_topic" : "homeassistant/binary_sensor/spa-controller/spa_status_water/config",
-			"state_topic"  : "spa-controller/spa_status/spa_status_water",
-			"monitor"      : {
-				             	"check_01": "spa_water_level"
-							 },
-			"payload_on"   : "problem",
-			"payload_off"  : "ok"
 		},
-		"spa_status_temp": {
-			"name"         : "Spa Status (Temperature)",
+		"spa_high_temp": {
+			"name"         : "Spa Status (High Temperature)",
 			"device_class" : "problem",
-			"config_topic" : "homeassistant/binary_sensor/spa-controller/spa_status_temp/config",
-			"state_topic"  : "spa-controller/spa_status/spa_status_temp",
+			"config_topic" : "homeassistant/binary_sensor/spa-controller/spa_high_temp/config",
+			"state_topic"  : "spa-controller/spa_status/spa_high_temp",
+			"sensor_type"  : "monitor",
 			"monitor"      : {
-								"check_01": "spa_temp_1, >39",
-								"check_02": "spa_temp_2, >39",
-								"check_03": "spa_temp_3, >39"
+								"spa_temp_1":">40",
+								"spa_temp_2":">40",
+								"spa_temp_3":">40",
+								"spa_temp_1":"<4",
+								"spa_temp_2":"<4",
+								"spa_temp_3":"<4"
 							 },
 			"payload_on"   : "problem",
 			"payload_off"  : "ok"
@@ -231,9 +222,10 @@
 			"device_class" : "problem",
 			"config_topic" : "homeassistant/binary_sensor/spa-controller/spa_status/config",
 			"state_topic"  : "spa-controller/spa_status",
+			"sensor_type"  : "monitor",
 			"monitor"      : {
-								"check_01": "spa_status_water",
-								"check_02": "spa_status_temp"
+								"spa_high_temp"  : "problem",
+								"spa_water_level": "problem"
 							 },
 			"payload_on"   : "problem",
 			"payload_off"  : "ok"
