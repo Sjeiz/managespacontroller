@@ -11,6 +11,9 @@ import json
 
 os.system('clear')
 print("Spa Controller: Script started")
+
+# sudo apt install python3-paho-mqtt
+# Enable 1 wire interface using sudo raspi-config
     
 # This script is run at boot using systemd
 # https://www.dexterindustries.com/howto/run-a-program-on-your-raspberry-pi-at-startup/
@@ -417,12 +420,12 @@ class Gpio(object):
     @value.setter
     def value(self,value):
         if self._value != value:
-            if debug: print(f"Gpio[{self.name}].set(old={self._value}, new={value})")
+            if debug: print(f"Gpio[{self.name}] = {value}")
             client.publish(self.state_topic, value)
             self._value = value
         
 
-    def set_io(self):
+    def set_io_direction(self):
         def get_initial_state(self):
             return self.gpio_on if hasattr(self, 'initial_state') and self.initial_state == 'on' else self.gpio_off
 
@@ -440,13 +443,45 @@ class Gpio(object):
                 pull_up_down = GPIO.PUD_DOWN
             GPIO.setup(self.pin, GPIO.IN, pull_up_down)
     
+    # def set_initial_state(self, problem_detected = False):
+    #     if self.direction == 'output':
+    #         # Switch gpio to initial state listed in config file
+    #         # Switch gpio off if problem detected
+    #         if problem_detected: 
+    #             state = self.gpio_off
+    #         else:
+    #             state = self.gpio_off if self.initial_state == self.payload_off else self.gpio_on
+            
+    #         # Set the gpio pin to the desired state
+    #         self.write(state)
+            
+    #         # Read the state
+    #         self.read()
+
     
     def read(self):
         self.value = self.payload_on if GPIO.input(self.pin) == self.gpio_on else self.payload_off
 
+
+    def write(self, state, problem_detection):
+        if self.direction == 'output':
+            if problem_detection.state == True:
+                state = self.payload_off
+            else:
+                # Detect conflicts
+                if hasattr(self, 'conflict'):
+                    gpio_conflict = globals()[self.conflict]
+                    if state == self.payload_on: gpio_conflict.value = gpio_conflict.payload_off
+                    elif gpio_conflict.value != gpio_conflict.initial_state: gpio_conflict.value = gpio_conflict.initial_state
+
+            state_pin = self.gpio_off if state == self.payload_off else self.gpio_on        
+            GPIO.output(self.pin, state_pin)
+            self.read()
+
+
     
     def publish(self):
-        if debug: print(f"Gpio[{self.name}].set({self._value})")
+        if debug: print(f"Gpio[{self.name}] = {self._value}")
         client.publish(self.state_topic, self._value)
         
 
@@ -479,7 +514,7 @@ class Sensor(object):
     @value.setter
     def value(self,value):
         if self._value is None or self._value+0.1 < value or value < self._value-0.1: #TODO: gebruik digits voor afronding uit config file
-            if debug: print(f"Sensor[{self.name}].set(old={self._value}, new={value})")
+            if debug: print(f"Sensor[{self.name}] = {value}")
             client.publish(self.state_topic, value)
             self._value = value
 
@@ -518,7 +553,7 @@ class Sensor(object):
                 self.value = get_w1sensor_value(sensor)
     
     def publish(self):
-        if debug: print(f"Sensor[{self.name}].set({self._value})")
+        if debug: print(f"Sensor[{self.name}] = {self._value}")
         client.publish(self.state_topic, self._value)
             
 
@@ -552,7 +587,7 @@ class Monitor(object):
     @value.setter
     def value(self,value):
         if self._value != value:
-            if debug: print(f"Monitor[{self.name}].set(old={self._value}, new={value})")
+            if debug: print(f"Monitor[{self.name}] = {value}")
             client.publish(self.state_topic, value)
             self._value = value
             pass
@@ -581,12 +616,25 @@ class Monitor(object):
             if status == self.payload_on: break # At least one problem found, exit loop        
         
         self.value = status
-
+    
+    
     def publish(self):
-        if debug: print(f"Monitor[{self.name}].set({self._value})")
+        if debug: print(f"Monitor[{self.name}] = {self._value}")
         client.publish(self.state_topic, self._value)
 
 
+class Problem(object):
+    def __init__(self):
+        self.state      = False
+        self.last_state = False
+        self.new_state  = False
+
+    def check(self):
+        self.new_state = False
+        for monitor in Monitor.instanceArr:
+            if monitor.value == monitor.payload_on: self.new_state = True
+        self.last_state = self.state
+        self.state = self.new_state
 
 
 def publish_ha_discovery_info(entry):
@@ -612,12 +660,14 @@ def publish_ha_discovery_info(entry):
         payload_json = json.dumps(device_dict)
         
         # Publish discovery message to MQTT
-        if debug: print("Publishing MQTT message to " + entry.config_topic)
+        if debug: print("Publishing MQTT discovery message to " + entry.config_topic)
         if debug: print(payload_json)
         client.publish(entry.config_topic, payload=payload_json, qos=config["mqtt"]["qos"], retain=True)
 
 
-
+def gpios_all_off():
+    for gpio in Gpio.instanceArr:
+        gpio.switch
 
 
 
@@ -671,9 +721,10 @@ GPIO.setwarnings(False)
 for gpio    in config["gpios"]     : exec(f"globals()[gpio]    = Gpio(gpio, config['gpios'][gpio])")
 for sensor  in config["sensors"]   : exec(f"globals()[sensor]  = Sensor(sensor, config['sensors'][sensor])")
 for monitor in config["monitors"]  : exec(f"globals()[monitor] = Monitor(monitor, config['monitors'][monitor])")
+problem_detection = Problem()
 
 #Initialize gpios input/output
-for gpio    in Gpio.instanceArr    : gpio.set_io()
+for gpio    in Gpio.instanceArr    : gpio.set_io_direction()
 
 # Publish HA autodiscovery information
 for gpio    in Gpio.instanceArr    : publish_ha_discovery_info(gpio)
@@ -681,12 +732,18 @@ for sensor  in Sensor.instanceArr  : publish_ha_discovery_info(sensor)
 for monitor in Monitor.instanceArr : publish_ha_discovery_info(monitor)
 
 # Get monitor readings. This will automatically update underlying sensors
-problem_detected = False
-for monitor in Monitor.instanceArr: 
-    monitor.read()
-    if monitor.value == monitor.payload_on: problem_detected = True
+for monitor in Monitor.instanceArr: monitor.read()
 
-republished_on = datetime.min
+# Check for problems
+problem_detection.check()
+
+
+# Set gpio initial_states (gpio_off if problem detected)
+for gpio in Gpio.instanceArr: 
+    if gpio.direction == 'output': gpio.write(gpio.initial_state, problem_detection)
+
+# Set the republished date/time
+republished_on = datetime.now()
 
 try:
     while True:
@@ -695,15 +752,27 @@ try:
         for sensor  in Sensor.instanceArr  : sensor.read()
         for monitor in Monitor.instanceArr : monitor.read()
         
-        if datetime.now() > republished_on + timedelta(seconds=30):
+        # Check problem status and act accordingly
+        problem_detection.check()
+        if problem_detection.state != problem_detection.last_state:
+            if problem_detection.state == True:
+                # Problem is detected -> Switch all gpios off
+                for gpio in Gpio.instanceArr: gpio.write(gpio.payload_off, problem_detection)
+            else:
+                # Problem is solved -> Swith all gpios to initial_state
+                for gpio in Gpio.instanceArr: 
+                    if gpio.direction == 'output': gpio.write(gpio.initial_state, problem_detection)
+        
+        # Republish all states/values if time has elapsed
+        if datetime.now() > republished_on + timedelta(seconds=config['mqtt']['republish_sec']):
             # Timer has elapsed. Republish all states/values
             republished_on = datetime.now()
             if debug: print("\nTimer has elapsed. Republishing all states")
             for gpio    in Gpio.instanceArr    : gpio.publish()
             for sensor  in Sensor.instanceArr  : sensor.publish()
-            for monitor in Monitor.instanceArr : monitor.read()
+            for monitor in Monitor.instanceArr : monitor.publish()
             
-
+        if debug: print(f"Going to sleep for {config['mqtt']['sleep']} seconds...")
         time.sleep(config['mqtt']['sleep'])
 
 except KeyboardInterrupt:

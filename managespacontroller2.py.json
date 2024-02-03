@@ -18,7 +18,7 @@
 								"suggested_area":"Garden"
 							},
 		"sleep"          : 1,
-		"republish_min"  : 1,
+		"republish_sec"  : 10,
 		"debug"          : "True"
 	},
 	
@@ -153,13 +153,13 @@
 			"gpio_off"      : 1
         },
 		"spa_water_level": {
-            "name"          : "Spa Status (Water Level)",
+            "name"          : "Spa Water Level",
             "direction"     : "input",
             "pin"           : 23,
             "device_class" : "problem",
             "config_topic" : "homeassistant/binary_sensor/spa-controller/spa_water_level/config",
-            "state_topic"  : "spa-controller/spa_status/spa_water_level",
-			"pull_up_down" : "down",
+            "state_topic"  : "spa-controller/spa_water_level",
+			"pull_up_down" : "up",
 			"payload_on"   : "problem",
 			"payload_off"  : "ok",
 			"gpio_on"       : 1,
@@ -207,7 +207,6 @@
 			"device_class" : "problem",
 			"config_topic" : "homeassistant/binary_sensor/spa-controller/spa_status_water/config",
 			"state_topic"  : "spa-controller/spa_status/spa_status_water",
-			"sensor_type"  : "monitor",
 			"monitor"      : {
 				             	"check_01": "spa_water_level"
 							 },
@@ -219,11 +218,10 @@
 			"device_class" : "problem",
 			"config_topic" : "homeassistant/binary_sensor/spa-controller/spa_status_temp/config",
 			"state_topic"  : "spa-controller/spa_status/spa_status_temp",
-			"sensor_type"  : "monitor",
 			"monitor"      : {
-								"check_01": "spa_temp_1, >40",
-								"check_02": "spa_temp_2, >40",
-								"check_03": "spa_temp_3, >40"
+								"check_01": "spa_temp_1, >39",
+								"check_02": "spa_temp_2, >39",
+								"check_03": "spa_temp_3, >39"
 							 },
 			"payload_on"   : "problem",
 			"payload_off"  : "ok"
@@ -233,7 +231,6 @@
 			"device_class" : "problem",
 			"config_topic" : "homeassistant/binary_sensor/spa-controller/spa_status/config",
 			"state_topic"  : "spa-controller/spa_status",
-			"sensor_type"  : "monitor",
 			"monitor"      : {
 								"check_01": "spa_status_water",
 								"check_02": "spa_status_temp"
