@@ -379,7 +379,7 @@ client.loop_start()
 
 # Wait for the MQTT connection to be established
 while not client.connected_flag:
-    time.sleep(1)
+    time.sleep(0.5)
 
 # Initialize basic sensor and gpio settings
 # Enable 1 wire temperature sensors
@@ -436,12 +436,20 @@ try:
         
         # Republish all states/values if time has elapsed
         if datetime.now() > republished_on + timedelta(seconds=config['mqtt']['republish_sec']):
-            # Timer has elapsed. Republish all states/values
             republished_on = datetime.now()
+            
+            # Timer has elapsed. Republish HA autodiscovery messages
+            if debug: print("\nTimer has elapsed. Republishing all HA autodiscovery messages")
+            for gpio    in Gpio.instanceArr    : publish_ha_discovery_info(gpio)
+            for sensor  in Sensor.instanceArr  : publish_ha_discovery_info(sensor)
+            for monitor in Monitor.instanceArr : publish_ha_discovery_info(monitor)
+
+            # Timer has elapsed. Republish all states/values
             if debug: print("\nTimer has elapsed. Republishing all states")
             for gpio    in Gpio.instanceArr    : gpio.publish()
             for sensor  in Sensor.instanceArr  : sensor.publish()
             for monitor in Monitor.instanceArr : monitor.publish()
+            # Republish HA autodiscovery messages
             
         #if debug: print(f"Going to sleep for {config['mqtt']['sleep']} seconds...")
         time.sleep(config['mqtt']['sleep'])

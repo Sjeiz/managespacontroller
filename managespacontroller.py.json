@@ -17,8 +17,8 @@
 								"model":"Raspberry Pi 4B Spa Controller",
 								"suggested_area":"Garden"
 							},
-		"sleep"          : 0,
-		"republish_sec"  : 60,
+		"sleep"          : 1,
+		"republish_sec"  : 600,
 		"debug"          : "True"
 	},
 	
