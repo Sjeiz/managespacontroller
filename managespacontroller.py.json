@@ -17,7 +17,7 @@
 								"model":"Raspberry Pi 4B Spa Controller",
 								"suggested_area":"Garden"
 							},
-		"sleep"          : 1,
+		"sleep"          : 0.1,
 		"republish_sec"  : 60,
 		"debug"          : "True"
 	},
@@ -63,6 +63,8 @@
             "config_topic"  : "homeassistant/switch/spa-controller/spa_circulation/config",
             "command_topic" : "spa-controller/spa_circulation/set",
             "state_topic"   : "spa-controller/spa_circulation",
+			"schedule_on_secs" : 3600,
+			"schedule_off_secs": 14400,
 			"payload_on"    : "on",
 			"payload_off"   : "off",
 			"gpio_on"       : 0,
@@ -77,6 +79,8 @@
             "config_topic"  : "homeassistant/switch/spa-controller/spa_pump1/config",
             "command_topic" : "spa-controller/spa_pump1/set",
             "state_topic"   : "spa-controller/spa_pump1",
+			"schedule_on_secs" : 30,
+			"schedule_off_secs": 86400,
 			"payload_on"    : "on",
 			"payload_off"   : "off",
 			"gpio_on"       : 0,
@@ -91,6 +95,8 @@
             "config_topic"  : "homeassistant/switch/spa-controller/spa_pump2/config",
             "command_topic" : "spa-controller/spa_pump2/set",
             "state_topic"   : "spa-controller/spa_pump2",
+			"schedule_on_secs" : 30,
+			"schedule_off_secs": 86400,
 			"payload_on"    : "on",
 			"payload_off"   : "off",
 			"gpio_on"       : 0,
@@ -105,6 +111,8 @@
             "config_topic"  : "homeassistant/switch/spa-controller/spa_pump3/config",
             "command_topic" : "spa-controller/spa_pump3/set",
             "state_topic"   : "spa-controller/spa_pump3",
+			"schedule_on_secs" : 30,
+			"schedule_off_secs": 86400,
 			"payload_on"    : "on",
 			"payload_off"   : "off",
 			"gpio_on"       : 0,
@@ -119,6 +127,8 @@
             "config_topic"  : "homeassistant/switch/spa-controller/spa_pump4/config",
             "command_topic" : "spa-controller/spa_pump4/set",
             "state_topic"   : "spa-controller/spa_pump4",
+			"schedule_on_secs" : 30,
+			"schedule_off_secs": 86400,
 			"payload_on"    : "on",
 			"payload_off"   : "off",
 			"gpio_on"       : 0,
@@ -133,6 +143,8 @@
             "config_topic"  : "homeassistant/switch/spa-controller/spa_blower/config",
             "command_topic" : "spa-controller/spa_blower/set",
             "state_topic"   : "spa-controller/spa_blower",
+			"schedule_on_secs" : 30,
+			"schedule_off_secs": 86400,
 			"payload_on"    : "on",
 			"payload_off"   : "off",
 			"gpio_on"       : 0,
@@ -208,7 +220,7 @@
 			"config_topic" : "homeassistant/binary_sensor/spa-controller/spa_status_water/config",
 			"state_topic"  : "spa-controller/spa_status/spa_status_water",
 			"monitor"      : {
-				             	"check_01": "spa_water_level"
+				             	"check_01": "state_on, spa_water_level"
 							 },
 			"payload_on"   : "problem",
 			"payload_off"  : "ok"
@@ -219,9 +231,9 @@
 			"config_topic" : "homeassistant/binary_sensor/spa-controller/spa_status_temp/config",
 			"state_topic"  : "spa-controller/spa_status/spa_status_temp",
 			"monitor"      : {
-								"check_01": "spa_temp_1, >39",
-								"check_02": "spa_temp_2, >39",
-								"check_03": "spa_temp_3, >39"
+								"check_01": "value_greater, spa_temp_1, 39",
+								"check_02": "value_greater, spa_temp_2, 39",
+								"check_03": "value_greater, spa_temp_2, 39"
 							 },
 			"payload_on"   : "problem",
 			"payload_off"  : "ok"
@@ -232,11 +244,25 @@
 			"config_topic" : "homeassistant/binary_sensor/spa-controller/spa_status/config",
 			"state_topic"  : "spa-controller/spa_status",
 			"monitor"      : {
-								"check_01": "spa_status_water",
-								"check_02": "spa_status_temp"
+								"check_01": "state_on, spa_status_water",
+								"check_02": "state_on, spa_status_temp"
 							 },
 			"payload_on"   : "problem",
 			"payload_off"  : "ok"
+		},
+		"spa_operation": {
+			"name"         : "Spa Operation",
+			"device_class" : "running",
+			"config_topic" : "homeassistant/binary_sensor/spa-controller/spa_operation/config",
+			"state_topic"  : "spa-controller/spa_operation",
+			"monitor"      : {
+								"check_01": "state_on_ignore_automation, spa_pump1",
+								"check_02": "state_on_ignore_automation, spa_pump2",
+								"check_03": "state_on_ignore_automation, spa_pump3",
+								"check_04": "state_on_ignore_automation, spa_pump4"
+							 },
+			"payload_on"   : "on",
+			"payload_off"  : "standby"
 		}
 	}
 }

@@ -8,6 +8,7 @@ import os
 import weakref
 import sys
 import json
+from random import randrange
 
 os.system('clear')
 print("Spa Controller: Script started")
@@ -49,6 +50,8 @@ class Gpio(object):
         # Add additional attributes
         self.unique_id = unique_id
         self._value = None
+        self.changed_on = datetime.now()
+        self.actor = "automation"
 
     @property
     def value(self):
@@ -60,12 +63,13 @@ class Gpio(object):
     @value.setter
     def value(self,value):
         if self._value != value:
-            if debug: print(f"Gpio[{self.name}] = {value}")
+            if debug: print(f"Gpio[{self.name}] --> {value}")
             if self.direction =='output':
                 state = self.gpio_off if value == self.payload_off else self.gpio_on        
                 GPIO.output(self.pin, state)
             
             self._value = value
+            self.changed_on = datetime.now()
             self.publish()
 
     def set_io_direction(self):
@@ -98,16 +102,22 @@ class Gpio(object):
                     gpio_conflict = globals()[self.conflict]
                     if state == self.payload_on: gpio_conflict.value = gpio_conflict.payload_off
                     elif gpio_conflict.value != gpio_conflict.initial_state: gpio_conflict.value = gpio_conflict.initial_state
-                pass
 
             state_pin = self.gpio_off if state == self.payload_off else self.gpio_on        
             GPIO.output(self.pin, state_pin)
         self._value = state
+        self.changed_on = datetime.now()
         self.publish()
     
     def publish(self):
         if debug: print(f"Gpio[{self.name}] = {self._value}")
         client.publish(self.state_topic, self._value)
+
+    def is_active(self):
+        if self.value == self.payload_on:
+            return True
+        else:
+            return False
 
 
 class Sensor(object):
@@ -193,6 +203,7 @@ class Monitor(object):
         # Add additional attributes
         self.unique_id = unique_id
         self._value = None
+        self.changed_on = None
         
     @property
     def value(self):
@@ -207,36 +218,57 @@ class Monitor(object):
             if debug: print(f"Monitor[{self.name}] = {value}")
             client.publish(self.state_topic, value)
             self._value = value
-            pass
+            self.changed_on = datetime.now()
 
     def read(self):
         status = self.payload_off
         for key, value in self.monitor.items():
-            check2perform = value.split(',')
-            sensor2check  = globals()[check2perform[0].strip()]
-            if len(check2perform) == 1:
-                # Simple state check required
-                if sensor2check.value == sensor2check.payload_on: status = self.payload_on
-            else:
-                # We need to check the value indicated
-                value2check   = check2perform[1].strip()
-                match value2check[:1]: #check first character
-                    case '<':
-                        if sensor2check.value <  int(value2check[1:]): status = self.payload_on
-                    case '>':
-                        if sensor2check.value >  int(value2check[1:]): status = self.payload_on
-                    case '=':
-                        if sensor2check.value == int(value2check[1:]): status = self.payload_on
-                    case '!':
-                        if sensor2check.value != int(value2check[1:]): status = self.payload_on
+            monitorarr = value.split(',')
+            check2perform = monitorarr[0].strip()
+            sensor2check  = globals()[monitorarr[1].strip()]
+            value2check = None if len(monitorarr)<3 else monitorarr[2].strip()
+                        
+            match check2perform:
+                case "state_on":
+                    if sensor2check.is_active(): status = self.payload_on
+                case "state_off":
+                    if not(sensor2check.is_active()): status = self.payload_on
+                case "state_on_ignore_automation":
+                    if sensor2check.is_active() and sensor2check.actor != 'automation': status = self.payload_on
+                case "state_off_ignore_automation":
+                    if not(sensor2check.is_active()) and sensor2check.actor != 'automation': status = self.payload_on
+                case "value_greater":
+                    if sensor2check.value >  int(value2check): status = self.payload_on
+                case "value_less":
+                    if sensor2check.value <  int(value2check): status = self.payload_on
+                case "value_equal":
+                    if sensor2check.value == int(value2check): status = self.payload_on
+                case "value_not_equal":
+                    if sensor2check.value != int(value2check): status = self.payload_on
+                case "time_on":
+                    if sensor2check.is_active() and datetime.now() > sensor2check.changed_on + timedelta(seconds=int(value2check)):
+                        status = self.payload_on
+                        if sensor2check.name == 'Spa Operation':
+                            pass
+                case "time_off":
+                    if not(sensor2check.is_active()) and datetime.now() > sensor2check.changed_on + timedelta(seconds=int(value2check)):
+                        status = self.payload_on
+                case "_":
+                    if debug: print(f"ERROR! Unknown monitor command ({check2perform}) defined for {sensor2check.name}")
             
-            if status == self.payload_on: break # At least one problem found, exit loop        
+            if status == self.payload_on: break # At least one check is positive, exit loop        
         
         self.value = status
     
     def publish(self):
         if debug: print(f"Monitor[{self.name}] = {self._value}")
         client.publish(self.state_topic, self._value)
+
+    def is_active(self):
+        if self.value == self.payload_on:
+            return True
+        else:
+            return False
 
 
 class Problem(object):
@@ -247,7 +279,7 @@ class Problem(object):
     def check(self):
         new_state = False
         for monitor in Monitor.instanceArr:
-            if monitor.value == monitor.payload_on: new_state = True
+            if monitor.is_active() and monitor.device_class == 'problem': new_state = True
         self.last_state = self.state
         self.state = new_state
 
@@ -306,6 +338,7 @@ def on_message(client, userdata, msg):
     qos     = msg.qos
     
     if debug: print(f"\nMessage received: {target=}, {value=}, {qos=}")
+    globals()[target].actor = "user"
     globals()[target].write(value)
     return
 
@@ -403,7 +436,7 @@ for gpio    in Gpio.instanceArr    : publish_ha_discovery_info(gpio)
 for sensor  in Sensor.instanceArr  : publish_ha_discovery_info(sensor)
 for monitor in Monitor.instanceArr : publish_ha_discovery_info(monitor)
 
-# Get monitor readings. This will automatically update underlying sensors
+# Get monitor readings. This will automatically initialize underlying sensors values
 for monitor in Monitor.instanceArr: monitor.read()
 
 # Check for problems
@@ -411,7 +444,9 @@ problem_detection.check()
 
 # Set gpio initial_states (gpio_off if problem detected)
 for gpio in Gpio.instanceArr: 
-    if gpio.direction == 'output': gpio.write(gpio.initial_state)
+    if gpio.direction == 'output': 
+        gpio.actor = "automation"
+        gpio.write(gpio.initial_state)
 
 # Set the republished date/time
 republished_on = datetime.now()
@@ -419,7 +454,23 @@ republished_on = datetime.now()
 try:
     while True:
         # Get values, publish if value has changed
-        for gpio    in Gpio.instanceArr    : gpio.read()
+        for gpio in Gpio.instanceArr: 
+            gpio.read()
+            if hasattr(gpio, 'schedule_on_secs') and not(spa_operation.is_active()) and not(spa_status.is_active()):
+                seconds_on = gpio.schedule_on_secs
+                seconds_off = gpio.schedule_off_secs + randrange(10) # Add some random time to prevent all pumps from switching on at the same time
+                if not(gpio.is_active()) and datetime.now() > gpio.changed_on + timedelta(seconds=seconds_off):
+                    # Start ON schedule
+                    if debug: print(f"Gpio[{gpio.name}] *** Starting ON schedule for {seconds_on} seconds")
+                    gpio.actor = "automation"
+                    gpio.write(gpio.payload_on)
+                    pass
+                elif gpio.is_active() and datetime.now() > gpio.changed_on + timedelta(seconds=seconds_on):
+                    # Start OFF schedule
+                    if debug: print(f"Gpio[{gpio.name}] *** Starting OFF schedule for {seconds_off} seconds")
+                    gpio.actor = "automation"
+                    gpio.write(gpio.payload_off)
+                    pass
         for sensor  in Sensor.instanceArr  : sensor.read()
         for monitor in Monitor.instanceArr : monitor.read()
         
@@ -428,11 +479,15 @@ try:
         if problem_detection.state != problem_detection.last_state:
             if problem_detection.state == True:
                 # Problem is detected -> Switch all gpios off
-                for gpio in Gpio.instanceArr: gpio.write(gpio.payload_off)
+                for gpio in Gpio.instanceArr: 
+                    gpio.actor = "automation"
+                    gpio.write(gpio.payload_off)
             else:
                 # Problem is solved -> Swith all gpios to initial_state
                 for gpio in Gpio.instanceArr: 
-                    if gpio.direction == 'output': gpio.write(gpio.initial_state)
+                    if gpio.direction == 'output': 
+                        gpio.actor = "automation"
+                        gpio.write(gpio.initial_state)
         
         # Republish all states/values if time has elapsed
         if datetime.now() > republished_on + timedelta(seconds=config['mqtt']['republish_sec']):
@@ -466,7 +521,9 @@ except KeyboardInterrupt:
 finally:
     # Revert to initial gpio states before quitting
     for gpio in Gpio.instanceArr: 
-        if gpio.direction == 'output': gpio.write(gpio.initial_state)
+        if gpio.direction == 'output': 
+            gpio.actor = "automation"
+            gpio.write(gpio.initial_state)
     
     # Stop the MQTT loop and disconnect from the MQTT Broker
     if debug: print("\nDisconnect from broker")
