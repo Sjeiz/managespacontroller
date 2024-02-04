@@ -81,7 +81,23 @@
             "state_topic"   : "spa-controller/spa_pump1",
 			"schedule_on_secs" : 30,
 			"schedule_off_secs": 86400,
-			"payload_on"    : "on",
+			"actions_on"    : {
+								  "spa_heatpump"    : "on",
+								  "spa_pump2"       : "on",
+								  "spa_pump3"       : "on",
+								  "spa_pump4"       : "on",
+								  "spa_circulation" : "on",
+								  "spa_lights"      : "on"
+							  },
+			"actions_off"   : {
+								  "spa_heatpump"    : "on",
+								  "spa_pump2"       : "off",
+								  "spa_pump3"       : "off",
+								  "spa_pump4"       : "off",
+								  "spa_circulation" : "off",
+								  "spa_lights"      : "off"
+							},
+		  "payload_on"    : "on",
 			"payload_off"   : "off",
 			"gpio_on"       : 0,
 			"gpio_off"      : 1

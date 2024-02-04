@@ -108,6 +108,14 @@ class Gpio(object):
         self._value = state
         self.changed_on = datetime.now()
         self.publish()
+
+        
+        if hasattr(self, "actions_on") and state == self.payload_on:
+            for key, value in self.actions_on.items():
+                globals()[key].write(value)
+        elif hasattr(self, "actions_off") and state == self.payload_off:
+            for key, value in self.actions_off.items():
+                globals()[key].write(value)
     
     def publish(self):
         if debug: print(f"Gpio[{self.name}] = {self._value}")
