@@ -192,6 +192,16 @@
 			"payload_off"  : "ok",
 			"gpio_on"       : 1,
 			"gpio_off"      : 0
+        },
+		"spa_buzzer": {
+            "name"          : "Spa Buzzer",
+            "direction"     : "output",
+            "pin"           : 24,
+			"initial_state" : "off",
+			"payload_on"   : "on",
+			"payload_off"  : "off",
+			"gpio_on"       : 1,
+			"gpio_off"      : 0
         }
     },
 	"sensors": {

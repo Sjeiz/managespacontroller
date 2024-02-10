@@ -9,6 +9,7 @@ import weakref
 import sys
 import json
 from random import randrange
+from threading import Thread, Event
 
 os.system('clear')
 print("Spa Controller: Script started")
@@ -116,10 +117,13 @@ class Gpio(object):
         elif hasattr(self, "actions_off") and state == self.payload_off:
             for key, value in self.actions_off.items():
                 globals()[key].write(value)
+        return
     
     def publish(self):
-        if debug: print(f"Gpio[{self.name}] = {self._value}")
-        client.publish(self.state_topic, self._value)
+        if hasattr(self, "state_topic"):
+            if debug: print(f"Gpio[{self.name}] = {self._value}")
+            client.publish(self.state_topic, self._value)
+        return
 
     def is_active(self):
         if self.value == self.payload_on:
@@ -290,6 +294,10 @@ class Problem(object):
             if monitor.is_active() and monitor.device_class == 'problem': new_state = True
         self.last_state = self.state
         self.state = new_state
+        if self.state:
+            spa_buzzer_on.set()
+        else:
+            spa_buzzer_on.clear()
 
 ### End class definitions ###
 
@@ -384,6 +392,17 @@ def str2bool(v):
   return v.lower() in ("yes", "true", "t", "1")
 
 
+def run_spa_buzzer_thread(spa_buzzer, spa_buzzer_on):
+    while True:
+        if spa_buzzer_on.is_set():
+            GPIO.output(spa_buzzer.pin, spa_buzzer.gpio_on)
+            time.sleep(0.5)
+            GPIO.output(spa_buzzer.pin, spa_buzzer.gpio_off)
+            time.sleep(0.5)
+        else:
+            GPIO.output(spa_buzzer.pin, spa_buzzer.gpio_off)
+            time.sleep(5)
+
 
 ############
 ### MAIN ###
@@ -439,6 +458,15 @@ problem_detection = Problem()
 #Initialize gpio input/output direction
 for gpio    in Gpio.instanceArr    : gpio.set_io_direction()
 
+# Initialize Spa buzzer as background process
+spa_buzzer_on = Event()
+spa_buzzer_thread = Thread(target=run_spa_buzzer_thread, name="Spa Buzzer", args=(spa_buzzer, spa_buzzer_on))
+spa_buzzer_thread.start()
+
+
+
+
+
 # Publish HA autodiscovery information
 for gpio    in Gpio.instanceArr    : publish_ha_discovery_info(gpio)
 for sensor  in Sensor.instanceArr  : publish_ha_discovery_info(sensor)
@@ -458,6 +486,8 @@ for gpio in Gpio.instanceArr:
 
 # Set the republished date/time
 republished_on = datetime.now()
+
+
 
 try:
     while True:
@@ -491,7 +521,7 @@ try:
                     gpio.actor = "automation"
                     gpio.write(gpio.payload_off)
             else:
-                # Problem is solved -> Swith all gpios to initial_state
+                # Problem is solved -> Switch all gpios to initial_state
                 for gpio in Gpio.instanceArr: 
                     if gpio.direction == 'output': 
                         gpio.actor = "automation"
