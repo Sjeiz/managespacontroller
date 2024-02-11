@@ -278,7 +278,7 @@
 							 },
 			"payload_on"   : "problem",
 			"payload_off"  : "ok",
-			"warning"      : "Water"
+			"warning"      : "WaterLow"
 		},
 		"spa_status_temp": {
 			"name"         : "Spa Status (Temperature)",
@@ -292,7 +292,7 @@
 							 },
 			"payload_on"   : "problem",
 			"payload_off"  : "ok",
-			"warning"      : "Temp"
+			"warning"      : "TempHigh"
 		},
 		"spa_status": {
 			"name"         : "Spa Status",
