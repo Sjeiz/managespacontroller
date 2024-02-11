@@ -10,6 +10,7 @@ import sys
 import json
 from random import randrange
 from threading import Thread, Event
+from LCDI2C_backpack import LCDI2C_backpack
 
 os.system('clear')
 print("Spa Controller: Script started")
@@ -130,6 +131,22 @@ class Gpio(object):
             return True
         else:
             return False
+        
+    def schedule(self):
+        if hasattr(self, 'schedule_on_secs') and not(spa_operation.is_active()) and not(spa_status.is_active()):
+            seconds_on = self.schedule_on_secs
+            seconds_off = self.schedule_off_secs + randrange(10) # Add some random time to prevent all pumps from switching on at the same time
+            if not(self.is_active()) and datetime.now() > self.changed_on + timedelta(seconds=seconds_off):
+                # Start ON schedule
+                if debug: print(f"Gpio[{self.name}] *** Starting ON schedule for {seconds_on} seconds")
+                self.actor = "automation"
+                self.write(self.payload_on)
+            elif self.is_active() and datetime.now() > self.changed_on + timedelta(seconds=seconds_on):
+                # Start OFF schedule
+                if debug: print(f"Gpio[{self.name}] *** Starting OFF schedule for {seconds_off} seconds")
+                self.actor = "automation"
+                self.write(self.payload_off)
+        return
 
 
 class Sensor(object):
@@ -287,15 +304,22 @@ class Problem(object):
     def __init__(self):
         self.state      = False
         self.last_state = False
+        self.problem    = None
 
     def check(self):
         new_state = False
+        problem = ""
         for monitor in Monitor.instanceArr:
-            if monitor.is_active() and monitor.device_class == 'problem': new_state = True
+            if monitor.is_active() and monitor.device_class == 'problem': 
+                new_state = True
+                if hasattr(monitor,'warning'):
+                    if len(problem) > 0: problem += ','
+                    problem += monitor.warning
         self.last_state = self.state
         self.state = new_state
         if self.state:
             spa_buzzer_on.set()
+            lcd.lcd_string(f"WARNING: {problem}",lcd.LCD_LINE_1)
         else:
             spa_buzzer_on.clear()
 
@@ -412,12 +436,18 @@ def run_spa_buzzer_thread(spa_buzzer, spa_buzzer_on):
 global debug
 global config
 global client
+global spinner
+spinner = None
 
 # Load configuration file  
 with open(__file__ +".json", "r") as jsonfile:
     config = json.load(jsonfile)
     debug = str2bool(config["mqtt"]["debug"])
     if debug: print("Configuration read successful")
+
+# Initialize LCD display
+lcd = LCDI2C_backpack(0x27)
+lcd.clear()
 
 # Create MQTT Client instance
 client = MQTT.Client(protocol=MQTT.MQTTv5)
@@ -446,7 +476,7 @@ while not client.connected_flag:
 os.system('modprobe w1-gpio')
 os.system('modprobe w1-therm')
 # Generic GPIO settings
-GPIO.setmode(GPIO.BOARD)
+GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 
 # Create object instances
@@ -462,10 +492,6 @@ for gpio    in Gpio.instanceArr    : gpio.set_io_direction()
 spa_buzzer_on = Event()
 spa_buzzer_thread = Thread(target=run_spa_buzzer_thread, name="Spa Buzzer", args=(spa_buzzer, spa_buzzer_on))
 spa_buzzer_thread.start()
-
-
-
-
 
 # Publish HA autodiscovery information
 for gpio    in Gpio.instanceArr    : publish_ha_discovery_info(gpio)
@@ -487,30 +513,42 @@ for gpio in Gpio.instanceArr:
 # Set the republished date/time
 republished_on = datetime.now()
 
-
-
 try:
     while True:
         # Get values, publish if value has changed
+        message = ""
         for gpio in Gpio.instanceArr: 
             gpio.read()
-            if hasattr(gpio, 'schedule_on_secs') and not(spa_operation.is_active()) and not(spa_status.is_active()):
-                seconds_on = gpio.schedule_on_secs
-                seconds_off = gpio.schedule_off_secs + randrange(10) # Add some random time to prevent all pumps from switching on at the same time
-                if not(gpio.is_active()) and datetime.now() > gpio.changed_on + timedelta(seconds=seconds_off):
-                    # Start ON schedule
-                    if debug: print(f"Gpio[{gpio.name}] *** Starting ON schedule for {seconds_on} seconds")
-                    gpio.actor = "automation"
-                    gpio.write(gpio.payload_on)
-                    pass
-                elif gpio.is_active() and datetime.now() > gpio.changed_on + timedelta(seconds=seconds_on):
-                    # Start OFF schedule
-                    if debug: print(f"Gpio[{gpio.name}] *** Starting OFF schedule for {seconds_off} seconds")
-                    gpio.actor = "automation"
-                    gpio.write(gpio.payload_off)
-                    pass
-        for sensor  in Sensor.instanceArr  : sensor.read()
+            gpio.schedule()
+            
+            if gpio.value == gpio.payload_on and hasattr(gpio,'short_name'):
+                if len(message) > 0 : message += " "
+                message += str(gpio.short_name)
+        
+        if not(problem_detection.state): 
+            if spa_operation.value == spa_operation.payload_off:
+                spaces = lcd.LCD_WIDTH - len(message) - len(spa_operation.payload_off) - 1
+                message += " " * spaces + (spa_operation.payload_off).title()
+            else:
+                spaces = lcd.LCD_WIDTH - len(message) - 1
+                message += " " * spaces
+
+            spinner = chr(165) if spinner == " " else " "
+            message = message + spinner
+            lcd.lcd_string(message,lcd.LCD_LINE_1)
+            
+            
+ 
+        message = ""
+        for sensor  in Sensor.instanceArr  : 
+            sensor.read()
+            if sensor.device_class == 'temperature':
+                if len(message) > 0 : message += "  "
+                message += str(sensor.value)
+        lcd.lcd_string(message,lcd.LCD_LINE_2)
+        
         for monitor in Monitor.instanceArr : monitor.read()
+        
         
         # Check problem status and act accordingly
         problem_detection.check()
@@ -526,6 +564,7 @@ try:
                     if gpio.direction == 'output': 
                         gpio.actor = "automation"
                         gpio.write(gpio.initial_state)
+                #lcd.lcd_string("",lcd.LCD_LINE_1)
         
         # Republish all states/values if time has elapsed
         if datetime.now() > republished_on + timedelta(seconds=config['mqtt']['republish_sec']):
