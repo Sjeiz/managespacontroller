@@ -315,7 +315,11 @@
 								"check_01": "state_on_ignore_automation, spa_pump1",
 								"check_02": "state_on_ignore_automation, spa_pump2",
 								"check_03": "state_on_ignore_automation, spa_pump3",
-								"check_04": "state_on_ignore_automation, spa_pump4"
+								"check_04": "state_on_ignore_automation, spa_pump4",
+								"check_05": "state_on_ignore_automation, spa_circulation",
+								"check_06": "state_on_ignore_automation, spa_ozonator",
+								"check_07": "state_on_ignore_automation, spa_lights",
+								"check_08": "state_on_ignore_automation, spa_blower"
 							 },
 			"payload_on"   : "on",
 			"payload_off"  : "standby"

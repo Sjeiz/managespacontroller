@@ -146,7 +146,12 @@ class Gpio(object):
                 if debug: print(f"Gpio[{self.name}] *** Starting OFF schedule for {seconds_off} seconds")
                 self.actor = "automation"
                 self.write(self.payload_off)
-        return
+
+    def status_message(self):
+        if self.value == self.payload_on and hasattr(self,'short_name'):
+            return str(self.short_name)
+        else:
+            return None
 
 
 class Sensor(object):
@@ -319,7 +324,7 @@ class Problem(object):
         self.state = new_state
         if self.state:
             spa_buzzer_on.set()
-            lcd.lcd_string(f"WARNING: {problem}",lcd.LCD_LINE_1)
+            myDisplay.lcd_string(f"WARNING: {problem}",myDisplay.LCD_LINE_1)
         else:
             spa_buzzer_on.clear()
 
@@ -428,6 +433,39 @@ def run_spa_buzzer_thread(spa_buzzer, spa_buzzer_on):
             time.sleep(5)
 
 
+
+
+class LcdDisplay(LCDI2C_backpack):
+    def __init__(self):
+        print("ChildB init'ed")
+        super().__init__(0x27)
+        self.activity_dot = ' '
+        self.message1 = ''
+        self.message2 = ''
+
+    def toggle_activity_dot(self):
+        self.activity_dot = chr(165) if self.activity_dot == " " else " "
+
+    def build_message1(self,status_message):
+        if status_message is not None:
+            if len(self.message1) > 0: self.message1 += ' '
+            self.message1 += status_message
+        
+    def display_message1(self):
+        if spa_operation.value == spa_operation.payload_off:
+            # Blink 'Standby'
+            spaces = self.LCD_WIDTH - len(self.message1) - len(spa_operation.payload_off)
+            if self.activity_dot != ' ': self.message1 += " " * spaces + (spa_operation.payload_off).title()
+        else:
+            # Blink activity_dot
+            spaces = self.LCD_WIDTH - len(self.message1) - 1
+            self.message1 += " " * spaces + self.activity_dot
+        self.toggle_activity_dot()
+        self.lcd_string(self.message1,self.LCD_LINE_1)
+        
+        
+
+
 ############
 ### MAIN ###
 ############
@@ -436,8 +474,7 @@ def run_spa_buzzer_thread(spa_buzzer, spa_buzzer_on):
 global debug
 global config
 global client
-global spinner
-spinner = None
+
 
 # Load configuration file  
 with open(__file__ +".json", "r") as jsonfile:
@@ -446,14 +483,14 @@ with open(__file__ +".json", "r") as jsonfile:
     if debug: print("Configuration read successful")
 
 # Initialize LCD display
-lcd = LCDI2C_backpack(0x27)
-lcd.clear()
+myDisplay = LcdDisplay() # TODO: uitvogelen hoe attr mee te geven (address=0x27) aan superclass
+myDisplay.clear()
 
 # Create MQTT Client instance
 client = MQTT.Client(protocol=MQTT.MQTTv5)
 client.username_pw_set(username=config['mqtt']['user'], password=config['mqtt']['password'])
-client.connected_flag=False
 client.will_set(config["mqtt"]["statustopic"],config["mqtt"]["statusoffline"],qos=config["mqtt"]["qos"],retain=True)
+client.connected_flag=False
 
 # Set the callback functions for the MQTT client
 client.on_connect    = on_connect
@@ -516,27 +553,15 @@ republished_on = datetime.now()
 try:
     while True:
         # Get values, publish if value has changed
-        message = ""
+        myDisplay.message1 = ''
         for gpio in Gpio.instanceArr: 
             gpio.read()
             gpio.schedule()
-            
-            if gpio.value == gpio.payload_on and hasattr(gpio,'short_name'):
-                if len(message) > 0 : message += " "
-                message += str(gpio.short_name)
-        
-        if not(problem_detection.state): 
-            if spa_operation.value == spa_operation.payload_off:
-                spaces = lcd.LCD_WIDTH - len(message) - len(spa_operation.payload_off) - 1
-                message += " " * spaces + (spa_operation.payload_off).title()
-            else:
-                spaces = lcd.LCD_WIDTH - len(message) - 1
-                message += " " * spaces
-
-            spinner = chr(165) if spinner == " " else " "
-            message = message + spinner
-            lcd.lcd_string(message,lcd.LCD_LINE_1)
-            
+            myDisplay.build_message1(gpio.status_message())
+        myDisplay.display_message1()
+        #activity_dot = display_status_message(message, activity_dot)
+        # TODO: Dit moet een object worden derived from LCDI2C_Backpack class to store message and activity dot
+                    
             
  
         message = ""
@@ -545,7 +570,7 @@ try:
             if sensor.device_class == 'temperature':
                 if len(message) > 0 : message += "  "
                 message += str(sensor.value)
-        lcd.lcd_string(message,lcd.LCD_LINE_2)
+        myDisplay.lcd_string(message,myDisplay.LCD_LINE_2)
         
         for monitor in Monitor.instanceArr : monitor.read()
         
@@ -564,7 +589,7 @@ try:
                     if gpio.direction == 'output': 
                         gpio.actor = "automation"
                         gpio.write(gpio.initial_state)
-                #lcd.lcd_string("",lcd.LCD_LINE_1)
+                #myDisplay.lcd_string("",myDisplay.LCD_LINE_1)
         
         # Republish all states/values if time has elapsed
         if datetime.now() > republished_on + timedelta(seconds=config['mqtt']['republish_sec']):
