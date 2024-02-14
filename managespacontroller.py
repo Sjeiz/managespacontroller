@@ -9,9 +9,10 @@ import weakref
 import sys
 import json
 from random import randrange
-from threading import Thread, Event
-from LCDI2C_backpack import LCDI2C_backpack
+#from threading import Thread, Event
+#from LCDI2C_backpack import LCDI2C_backpack
 import traceback
+import liquidcrystal_i2c # https://github.com/pl31/python-liquidcrystal_i2c/tree/master
 
 os.system('clear')
 print("Spa Controller: Script started")
@@ -29,7 +30,8 @@ print("Spa Controller: Script started")
 
 # To restart the script: sudo systemctl managespacontroller.service
 
-
+# sudo apt install python3-luma.lcd
+# https://github.com/rm-hull/luma.lcd
 
 #TODO: interrupt driven GPIOS!!!!
 #https://roboticsbackend.com/raspberry-pi-gpio-interrupts-tutorial/
@@ -318,57 +320,104 @@ class Problem(object):
         for monitor in Monitor.instanceArr:
             if monitor.is_active() and monitor.device_class == 'problem': 
                 new_state = True
-                if hasattr(monitor,'warning'):
-                    if len(problem) > 0: problem += ','
-                    problem += monitor.warning
+                myLCD.on()
+                if hasattr(monitor,'warning'): 
+                    myLCD._statusmessage += "\n" + monitor.warning
+                    #myLCD.buildstatusmessage(monitor.warning)
         self.last_state = self.state
         self.state = new_state
         if self.state:
-            if myDisplay.activity_dot != ' ':    
+            if myLCD._activity_dot != ' ':    
                 GPIO.output(spa_buzzer.pin, spa_buzzer.gpio_on)
             else:
                 GPIO.output(spa_buzzer.pin, spa_buzzer.gpio_off)
-            myDisplay.message1 = problem
-            myDisplay.display_message1()
+            myLCD.printstatusmessage()
         else:
             GPIO.output(spa_buzzer.pin, spa_buzzer.gpio_off)
-            #myDisplay.message1 = ''
-            #myDisplay.display_message1()
+            myLCD.clearline(0)
 
 
-class LcdDisplay(LCDI2C_backpack):
-    def __init__(self, address):
+class myLCDI2C(liquidcrystal_i2c.LiquidCrystal_I2C):
+    def __init__(self, addr, port, numlines=4, numcolumns=20):
         print("ChildB init'ed")
-        super().__init__(address)
-        self.activity_dot = ' '
-        self.message1 = ''
-        self.message2 = ''
+        super().__init__(addr, port, numlines)
+        self._activity_dot = ' '
+        #self.message1 = ''
+        #self.message2 = ''
+        self._numcolumns = numcolumns # width of the display
+        self._statusmessage = None
 
-    def toggle_activity_dot(self):
-        self.activity_dot = chr(165) if self.activity_dot == " " else " "
+    # overloaded original function
+        # add spaces to clear the rest of the line
+        # display off if 
 
-    def build_message1(self,status_message):
-        if status_message is not None:
-            if len(self.message1) > 0: self.message1 += ' '
-            self.message1 += status_message
-        
-    def display_message1(self):
-        if problem_detection.state:
-            # Blink warning
-            if self.activity_dot != ' ': 
-                self.message1 = "WARNING " + self.message1 
-            else:
-                self.message1 = "        " + self.message1
-        elif spa_operation.value == spa_operation.payload_off:
-            # Blink 'Standby'
-            spaces = self.LCD_WIDTH - len(self.message1) - len(spa_operation.payload_off)
-            if self.activity_dot != ' ': self.message1 += " " * spaces + (spa_operation.payload_off).title()
+    def printline(self, linenr, value):
+        _spaisactive = False
+        _spaisproblem = False
+        try:    _spaisactive = spa_operation.is_active()
+        except: pass
+        try:    _spaisproblem = spa_status.is_active()
+        except:
+            pass
+        if _spaisactive or _spaisproblem:
+            self.on()
+            self.setCursor(0, linenr)
+            spaces = ' ' * (self._numcolumns - len(value))
+            self.printstr(value + spaces)
         else:
-            # Blink activity_dot
-            spaces = self.LCD_WIDTH - len(self.message1) - 1
-            self.message1 += " " * spaces + self.activity_dot
+            self.off()
+        
+
+    # split the string over multiple lines starting at linenr
+    def printmultiline(self, linenr, value):
+        line = linenr
+        # Clear all lines starting at the indicated linenr
+        for i in range(self._numlines - linenr):
+            self.clearline(i)
+        # split the messaage and display on multiple lines
+        while len(value) > 0:
+            slice = value[0:self._numcolumns]
+            value = value[self._numcolumns:]
+            self.clearline(line)
+            self.printline(line, slice)
+            line += 1
+
+    
+    def clearline(self, linenr):
+        # fills the indicated line with spaces
+        self.printline(linenr,' '*self._numcolumns)   
+
+    def printlinejustified(self, linenr, valueleft, valueright):
+        spaces = ' ' * (self._numcolumns - len(valueleft) - len(valueright))
+        message = valueleft + spaces + valueright
+        self.printline(linenr, message)
+
+    def off(self):
+        if self._displaycontrol == self._LCD_DISPLAYON: 
+            self.noDisplay()
+        if self._backlightval == self._LCD_BACKLIGHT: 
+            self.noBacklight()
+
+    def on(self):
+        if self._backlightval == self._LCD_NOBACKLIGHT: 
+            self.backlight()
+        if self._displaycontrol == self._LCD_DISPLAYOFF: 
+            self.display()
+
+    def clearstatusmessage(self):
+        self._statusmessage = None
+
+    def buildstatusmessage(self, value):
+        if value is not None:
+            self._statusmessage = value if self._statusmessage is None else self._statusmessage + ' ' + value
+    
+    def toggle_activity_dot(self):
+        self._activity_dot = "*" if self._activity_dot == " " else " "
+
+    def printstatusmessage(self):
         self.toggle_activity_dot()
-        self.lcd_string(self.message1,self.LCD_LINE_1)
+        self.printlinejustified(0, self._statusmessage, self._activity_dot)
+        
 
 ### End class definitions ###
 
@@ -482,8 +531,8 @@ with open(__file__ +".json", "r") as jsonfile:
     if debug: print("Configuration read successful")
 
 # Initialize LCD display
-myDisplay = LcdDisplay(address=0x27)
-myDisplay.clear()
+myLCD = myLCDI2C(addr=0x27, port=1, numlines=4)
+myLCD.printline(0,"Program started!")
 
 # Create MQTT Client instance
 client = MQTT.Client(protocol=MQTT.MQTTv5)
@@ -498,7 +547,11 @@ client.on_message    = on_message
 client.on_disconnect = on_disconnect
 
 # Connect to the MQTT broker
-connect_mqtt_broker(client, config['mqtt']['server'], config['mqtt']['port'], config['mqtt']['keepalive'])
+connect_mqtt_broker(client, 
+                    config['mqtt']['server'], 
+                    config['mqtt']['port'], 
+                    config['mqtt']['keepalive']
+                    )
 
 # Start the MQTT loop to receive messages
 client.loop_start()
@@ -546,24 +599,23 @@ republished_on = datetime.now()
 
 try:
     while True:
-        # Get values, publish if value has changed
-        if not problem_detection.state: myDisplay.message1 = ''
+        myLCD.clearstatusmessage()
         for gpio in Gpio.instanceArr: 
             gpio.read()
-            if not problem_detection.state:
-                gpio.schedule()
-                myDisplay.build_message1(gpio.status_message())
-        if not problem_detection.state: myDisplay.display_message1()
+            if not problem_detection.state: gpio.schedule()
+            myLCD.buildstatusmessage(gpio.status_message())
+        myLCD.printstatusmessage()
         
-            
- 
-        message = ""
+        
+        i=1 # Temperature messages on line 1 - 3
         for sensor  in Sensor.instanceArr  : 
             sensor.read()
             if sensor.device_class == 'temperature':
-                if len(message) > 0 : message += "  "
-                message += str(sensor.value)
-        myDisplay.lcd_string(message,myDisplay.LCD_LINE_2)
+                myLCD.printlinejustified(linenr     = i,
+                                         valueleft  = sensor.name + ':',
+                                         valueright = str(sensor.value)
+                                         )
+                i += 1
         
         for monitor in Monitor.instanceArr : monitor.read()
         
@@ -606,8 +658,8 @@ try:
 
 except KeyboardInterrupt:
     if debug: print("\nSpa Controller: Script halted")
-    myDisplay.clear()
-    myDisplay.lcd_string("Program stopped!", myDisplay.LCD_LINE_1)
+    myLCD.clear()
+    myLCD.printline(0, "Program stopped!")
 
 except Exception as e:  
     # this catches ALL other exceptions including errors.  
@@ -619,12 +671,9 @@ except Exception as e:
     #print(exception_type)
     #print(exception_object)
     #print(exception_traceback)
-    message = "Line{line}:{error}".format(line=exception_traceback.tb_lineno,error=type(e).__name__)
-    message1 = message[:myDisplay.LCD_WIDTH]
-    message2 = message.replace(message1,'')
-    myDisplay.clear()
-    myDisplay.lcd_string(message1, myDisplay.LCD_LINE_1)
-    myDisplay.lcd_string(message2, myDisplay.LCD_LINE_2)
+    #message = "Line{line}:{error}".format(line=exception_traceback.tb_lineno,error=type(e).__name__)
+    message = "Line{line}:{errortype}({error})".format(line=exception_traceback.tb_lineno,errortype=type(e).__name__,error=e)
+    myLCD.printmultiline(0, message)
     pass
     
 finally:

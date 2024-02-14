@@ -4,7 +4,7 @@ import time
 class LCDI2C_backpack(object):
     # Define some device parameters
     I2C_ADDR = 0x27
-    LCD_WIDTH = 16
+    LCD_WIDTH = 20
 
     # Define some device constants
     LCD_CHR = 1 # Mode - Sending command
@@ -21,6 +21,10 @@ class LCDI2C_backpack(object):
     # Timing constants
     E_PULSE = 0.0005
     E_DELAY = 0.0005
+
+    # flags for backlight control
+    LCD_BACKLIGHT = 0x08
+    LCD_NOBACKLIGHT = 0x00
 
     #Open I2C interface
     #bus = smbus.SMBus(0) # Rev 1 Pi uses 0
@@ -47,13 +51,14 @@ class LCDI2C_backpack(object):
         self.lcd_byte(0x01,self.LCD_CMD) # 000001 Clear display
         time.sleep(self.E_DELAY)
     
-    def lcd_byte(self, bits, mode):
+    def lcd_byte(self, bits, mode, backlight=True):
         # Send byte to data pins
         # bits = the data
         # mode = 1 for character
         # 0 for command
-        self.bits_high = mode | (bits & 0xF0) | self.LCD_BACKLIGHT
-        self.bits_low = mode | ((bits<<4) & 0xF0) | self.LCD_BACKLIGHT
+        backlight = self.LCD_BACKLIGHT if backlight == True else 0
+        self.bits_high = mode | (bits & 0xF0) | backlight
+        self.bits_low = mode | ((bits<<4) & 0xF0) | backlight
         # High bits
         self.bus.write_byte(self.I2C_ADDR, self.bits_high)
         self.lcd_toggle_enable(self.bits_high)
@@ -77,6 +82,13 @@ class LCDI2C_backpack(object):
         self.lcd_byte(self.LCD_CURSORSHIFT | self.LCD_DISPLAYMOVE |
         self.LCD_MOVELEFT, self.LCD_CMD)
 
+    # define backlight on/off 
+    def backlight(self, state): # for state, 1 = on, 0 = off
+        if state == 1:
+            self.lcd_byte(0, self.LCD_CMD, backlight=True)
+        elif state == 0:
+            self.lcd_byte(0, self.LCD_CMD, backlight=False)
+
     def message(self, text):
         # Send string to display
         for char in text:
@@ -94,4 +106,6 @@ class LCDI2C_backpack(object):
     
     def clear(self):
         self.lcd_byte(0x01, self.LCD_CMD)
+
+    
 
