@@ -316,14 +316,13 @@ class Problem(object):
 
     def check(self):
         new_state = False
-        problem = ""
+        problem = "WARNING:"
         for monitor in Monitor.instanceArr:
             if monitor.is_active() and monitor.device_class == 'problem': 
                 new_state = True
                 myLCD.on()
-                if hasattr(monitor,'warning'): 
-                    myLCD._statusmessage += "\n" + monitor.warning
-                    #myLCD.buildstatusmessage(monitor.warning)
+                if hasattr(monitor,'warning'): problem += ' ' + monitor.warning
+                    
         self.last_state = self.state
         self.state = new_state
         if self.state:
@@ -331,10 +330,11 @@ class Problem(object):
                 GPIO.output(spa_buzzer.pin, spa_buzzer.gpio_on)
             else:
                 GPIO.output(spa_buzzer.pin, spa_buzzer.gpio_off)
+            myLCD._statusmessage = problem
             myLCD.printstatusmessage()
         else:
             GPIO.output(spa_buzzer.pin, spa_buzzer.gpio_off)
-            myLCD.clearline(0)
+            if self.state != self.last_state: myLCD.clearline(0)
 
 
 class myLCDI2C(liquidcrystal_i2c.LiquidCrystal_I2C):
@@ -342,45 +342,44 @@ class myLCDI2C(liquidcrystal_i2c.LiquidCrystal_I2C):
         print("ChildB init'ed")
         super().__init__(addr, port, numlines)
         self._activity_dot = ' '
-        #self.message1 = ''
-        #self.message2 = ''
         self._numcolumns = numcolumns # width of the display
         self._statusmessage = None
 
     # overloaded original function
         # add spaces to clear the rest of the line
         # display off if 
-
     def printline(self, linenr, value):
-        _spaisactive = False
-        _spaisproblem = False
-        try:    _spaisactive = spa_operation.is_active()
-        except: pass
-        try:    _spaisproblem = spa_status.is_active()
-        except:
-            pass
-        if _spaisactive or _spaisproblem:
-            self.on()
-            self.setCursor(0, linenr)
-            spaces = ' ' * (self._numcolumns - len(value))
-            self.printstr(value + spaces)
-        else:
-            self.off()
+        if value is not None:
+            _spaisactive = False
+            _spaisproblem = False
+            try:    _spaisactive = spa_operation.is_active()
+            except: pass
+            try:    _spaisproblem = spa_status.is_active()
+            except:
+                pass
+            if _spaisactive or _spaisproblem:
+                self.on()
+                self.setCursor(0, linenr)
+                spaces = ' ' * (self._numcolumns - len(value))
+                self.printstr(value + spaces)
+            else:
+                self.off()
         
 
     # split the string over multiple lines starting at linenr
     def printmultiline(self, linenr, value):
-        line = linenr
-        # Clear all lines starting at the indicated linenr
-        for i in range(self._numlines - linenr):
-            self.clearline(i)
-        # split the messaage and display on multiple lines
-        while len(value) > 0:
-            slice = value[0:self._numcolumns]
-            value = value[self._numcolumns:]
-            self.clearline(line)
-            self.printline(line, slice)
-            line += 1
+        if value is not None:
+            line = linenr
+            # Clear all lines starting at the indicated linenr
+            for i in range(self._numlines - linenr):
+                self.clearline(i)
+            # split the messaage and display on multiple lines
+            while len(value) > 0:
+                slice = value[0:self._numcolumns]
+                value = value[self._numcolumns:]
+                self.clearline(line)
+                self.printline(line, slice)
+                line += 1
 
     
     def clearline(self, linenr):
@@ -388,9 +387,10 @@ class myLCDI2C(liquidcrystal_i2c.LiquidCrystal_I2C):
         self.printline(linenr,' '*self._numcolumns)   
 
     def printlinejustified(self, linenr, valueleft, valueright):
-        spaces = ' ' * (self._numcolumns - len(valueleft) - len(valueright))
-        message = valueleft + spaces + valueright
-        self.printline(linenr, message)
+        if valueleft is not None and valueright is not None:
+            spaces = ' ' * (self._numcolumns - len(valueleft) - len(valueright))
+            message = valueleft + spaces + valueright
+            self.printline(linenr, message)
 
     def off(self):
         if self._displaycontrol == self._LCD_DISPLAYON: 
@@ -415,8 +415,9 @@ class myLCDI2C(liquidcrystal_i2c.LiquidCrystal_I2C):
         self._activity_dot = "*" if self._activity_dot == " " else " "
 
     def printstatusmessage(self):
-        self.toggle_activity_dot()
-        self.printlinejustified(0, self._statusmessage, self._activity_dot)
+        if self._statusmessage is not None:
+            self.toggle_activity_dot()
+            self.printlinejustified(0, self._statusmessage, self._activity_dot)
         
 
 ### End class definitions ###
