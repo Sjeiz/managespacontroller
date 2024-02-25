@@ -39,14 +39,10 @@ print("Spa Controller: Script started")
 
 
 ### Begin class definitions ###
+#class SpaEntity(object):
 
 class Gpio(object):
-    instanceArr = [] # This create a list with all instances of this class
-    
     def __init__(self, unique_id, config):
-        # Add this instance to instanceArr
-        self.__class__.instanceArr.append(weakref.proxy(self))
-        
         # Add all attributes from config file
         for key, value in config.items():
             if debug: print(f"Initializing Gpio[{config['name']}][{key}] = {value}")
@@ -104,7 +100,7 @@ class Gpio(object):
             else:
                 # Detect conflicts
                 if hasattr(self, 'conflict'):
-                    gpio_conflict = globals()[self.conflict]
+                    gpio_conflict = mySpa[self.conflict]
                     if state == self.payload_on: gpio_conflict.value = gpio_conflict.payload_off
                     elif gpio_conflict.value != gpio_conflict.initial_state: gpio_conflict.value = gpio_conflict.initial_state
 
@@ -117,10 +113,10 @@ class Gpio(object):
         
         if hasattr(self, "actions_on") and state == self.payload_on:
             for key, value in self.actions_on.items():
-                globals()[key].write(value)
+                mySpa[key].write(value)
         elif hasattr(self, "actions_off") and state == self.payload_off:
             for key, value in self.actions_off.items():
-                globals()[key].write(value)
+                mySpa[key].write(value)
         return
     
     def publish(self):
@@ -136,7 +132,7 @@ class Gpio(object):
             return False
         
     def schedule(self):
-        if hasattr(self, 'schedule_on_secs') and not(spa_operation.is_active()) and not(spa_status.is_active()):
+        if hasattr(self, 'schedule_on_secs') and not(mySpa['spa_operation'].is_active()) and not(mySpa['spa_status'].is_active()):
             seconds_on = self.schedule_on_secs
             seconds_off = self.schedule_off_secs + randrange(10) # Add some random time to prevent all pumps from switching on at the same time
             if not(self.is_active()) and datetime.now() > self.changed_on + timedelta(seconds=seconds_off):
@@ -158,12 +154,7 @@ class Gpio(object):
 
 
 class Sensor(object):
-    instanceArr = [] # This create a list with all instances of this class
-    
     def __init__(self, unique_id, config):
-        # Add this instance to instanceArr
-        self.__class__.instanceArr.append(weakref.proxy(self))
-        
         # Add all attributes from config file
         for key, value in config.items():
             if debug: print(f"Initializing Sensor[{config['name']}][{key}] = {value}")
@@ -226,12 +217,7 @@ class Sensor(object):
 
 
 class Monitor(object):
-    instanceArr = [] # This create a list with all instances of this class
-    
     def __init__(self, unique_id, config):
-        # Add this instance to instanceArr
-        self.__class__.instanceArr.append(weakref.proxy(self))
-        
         # Add all attributes from config file
         for key, value in config.items():
             if debug: print(f"Initializing Monitor[{config['name']}][{key}] = {value}")
@@ -262,36 +248,36 @@ class Monitor(object):
         for key, value in self.monitor.items():
             monitorarr = value.split(',')
             check2perform = monitorarr[0].strip()
-            sensor2check  = globals()[monitorarr[1].strip()]
+            sensor2check  = monitorarr[1].strip()
             value2check = None if len(monitorarr)<3 else monitorarr[2].strip()
                         
             match check2perform:
                 case "state_on":
-                    if sensor2check.is_active(): status = self.payload_on
+                    if mySpa[sensor2check].is_active(): status = self.payload_on
                 case "state_off":
-                    if not(sensor2check.is_active()): status = self.payload_on
+                    if not(mySpa[sensor2check].is_active()): status = self.payload_on
                 case "state_on_ignore_automation":
-                    if sensor2check.is_active() and sensor2check.actor != 'automation': status = self.payload_on
+                    if mySpa[sensor2check].is_active() and mySpa[sensor2check].actor != 'automation': status = self.payload_on
                 case "state_off_ignore_automation":
-                    if not(sensor2check.is_active()) and sensor2check.actor != 'automation': status = self.payload_on
+                    if not(mySpa[sensor2check].is_active()) and mySpa[sensor2check].actor != 'automation': status = self.payload_on
                 case "value_greater":
-                    if sensor2check.value >  int(value2check): status = self.payload_on
+                    if mySpa[sensor2check].value >  int(value2check): status = self.payload_on
                 case "value_less":
-                    if sensor2check.value <  int(value2check): status = self.payload_on
+                    if mySpa[sensor2check].value <  int(value2check): status = self.payload_on
                 case "value_equal":
-                    if sensor2check.value == int(value2check): status = self.payload_on
+                    if mySpa[sensor2check].value == int(value2check): status = self.payload_on
                 case "value_not_equal":
-                    if sensor2check.value != int(value2check): status = self.payload_on
+                    if mySpa[sensor2check].value != int(value2check): status = self.payload_on
                 case "time_on":
-                    if sensor2check.is_active() and datetime.now() > sensor2check.changed_on + timedelta(seconds=int(value2check)):
+                    if mySpa[sensor2check].is_active() and datetime.now() > mySpa[sensor2check].changed_on + timedelta(seconds=int(value2check)):
                         status = self.payload_on
                         if sensor2check.name == 'Spa Operation':
                             pass
                 case "time_off":
-                    if not(sensor2check.is_active()) and datetime.now() > sensor2check.changed_on + timedelta(seconds=int(value2check)):
+                    if not(mySpa[sensor2check].is_active()) and datetime.now() > mySpa[sensor2check].changed_on + timedelta(seconds=int(value2check)):
                         status = self.payload_on
                 case "_":
-                    if debug: print(f"ERROR! Unknown monitor command ({check2perform}) defined for {sensor2check.name}")
+                    if debug: print(f"ERROR! Unknown monitor command ({check2perform}) defined for {mySpa[sensor2check].name}")
             
             if status == self.payload_on: break # At least one check is positive, exit loop        
         
@@ -317,7 +303,7 @@ class Problem(object):
     def check(self):
         new_state = False
         problem = "WARNING:"
-        for monitor in Monitor.instanceArr:
+        for monitor in get_list_by_type(mySpa, Monitor):
             if monitor.is_active() and monitor.device_class == 'problem': 
                 new_state = True
                 myLCD.on()
@@ -327,13 +313,13 @@ class Problem(object):
         self.state = new_state
         if self.state:
             if myLCD._activity_dot != ' ':    
-                GPIO.output(spa_buzzer.pin, spa_buzzer.gpio_on)
+                GPIO.output(mySpa['spa_buzzer'].pin, mySpa['spa_buzzer'].gpio_on)
             else:
-                GPIO.output(spa_buzzer.pin, spa_buzzer.gpio_off)
+                GPIO.output(mySpa['spa_buzzer'].pin, mySpa['spa_buzzer'].gpio_off)
             myLCD._statusmessage = problem
             myLCD.printstatusmessage()
         else:
-            GPIO.output(spa_buzzer.pin, spa_buzzer.gpio_off)
+            GPIO.output(mySpa['spa_buzzer'].pin, mySpa['spa_buzzer'].gpio_off)
             if self.state != self.last_state: myLCD.clearline(0)
 
 
@@ -352,9 +338,9 @@ class myLCDI2C(liquidcrystal_i2c.LiquidCrystal_I2C):
         if value is not None:
             _spaisactive = False
             _spaisproblem = False
-            try:    _spaisactive = spa_operation.is_active()
+            try:    _spaisactive = mySpa['spa_operation'].is_active()
             except: pass
-            try:    _spaisproblem = spa_status.is_active()
+            try:    _spaisproblem = mySpa['spa_status'].is_active()
             except:
                 pass
             if _spaisactive or _spaisproblem:
@@ -475,8 +461,8 @@ def on_message(client, userdata, msg):
     qos     = msg.qos
     
     if debug: print(f"\nMessage received: {target=}, {value=}, {qos=}")
-    globals()[target].actor = "user"
-    globals()[target].write(value)
+    mySpa[target].actor = "user"
+    mySpa[target].write(value)
     return
 
 
@@ -569,28 +555,44 @@ os.system('modprobe w1-therm')
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 
+# class Spa(object):
+#     def __init__(self):
+#         self.name = None
+#         self.type = None
+# mySpa = Spa()
+# mySpa.name = "Test"
+# mySpa.type = "gpio"
+
+mySpa = {}
+
 # Create object instances
-for gpio    in config["gpios"]     : exec(f"globals()[gpio]    = Gpio(gpio, config['gpios'][gpio])")
-for sensor  in config["sensors"]   : exec(f"globals()[sensor]  = Sensor(sensor, config['sensors'][sensor])")
-for monitor in config["monitors"]  : exec(f"globals()[monitor] = Monitor(monitor, config['monitors'][monitor])")
+for gpio    in config["gpios"]     : mySpa[gpio] = Gpio(gpio, config['gpios'][gpio])
+for sensor  in config["sensors"]   : mySpa[sensor] = Sensor(sensor, config['sensors'][sensor])
+for monitor in config["monitors"]  : mySpa[monitor] = Monitor(monitor, config['monitors'][monitor])
+
+def get_list_by_type(sensorList, sensorType):
+    myReturnList = []
+    for item in sensorList:
+        if type(sensorList[item]) == sensorType: myReturnList.append(sensorList[item])
+    return myReturnList
+
+# Initialize gpio input/output direction
+for gpio in get_list_by_type(mySpa, Gpio): gpio.set_io_direction()
+
+# Get initial monitor readings. This will automatically initialize underlying sensors values
+for monitor in get_list_by_type(mySpa, Monitor): monitor.read()
+
+# Publish HA autodiscovery information 
+for item in mySpa.items(): publish_ha_discovery_info(item)
+    
+# Initialize problem_detection
 problem_detection = Problem()
 
-#Initialize gpio input/output direction
-for gpio    in Gpio.instanceArr    : gpio.set_io_direction()
-
-# Publish HA autodiscovery information
-for gpio    in Gpio.instanceArr    : publish_ha_discovery_info(gpio)
-for sensor  in Sensor.instanceArr  : publish_ha_discovery_info(sensor)
-for monitor in Monitor.instanceArr : publish_ha_discovery_info(monitor)
-
-# Get monitor readings. This will automatically initialize underlying sensors values
-for monitor in Monitor.instanceArr: monitor.read()
-
-# Check for problems
+# Check for initial problems before setting gpio initial states
 problem_detection.check()
 
 # Set gpio initial_states (gpio_off if problem detected)
-for gpio in Gpio.instanceArr: 
+for gpio in get_list_by_type(mySpa, Gpio): 
     if gpio.direction == 'output': 
         gpio.actor = "automation"
         gpio.write(gpio.initial_state)
@@ -601,7 +603,7 @@ republished_on = datetime.now()
 try:
     while True:
         myLCD.clearstatusmessage()
-        for gpio in Gpio.instanceArr: 
+        for gpio in get_list_by_type(mySpa, Gpio): 
             gpio.read()
             if not problem_detection.state: gpio.schedule()
             myLCD.buildstatusmessage(gpio.status_message())
@@ -609,16 +611,16 @@ try:
         
         
         i=1 # Temperature messages on line 1 - 3
-        for sensor  in Sensor.instanceArr  : 
+        for sensor  in get_list_by_type(mySpa, Sensor): 
             sensor.read()
             if sensor.device_class == 'temperature':
                 myLCD.printlinejustified(linenr     = i,
-                                         valueleft  = sensor.name + ':',
-                                         valueright = str(sensor.value)
-                                         )
+                                            valueleft  = sensor.name + ':',
+                                            valueright = str(sensor.value)
+                                            )
                 i += 1
         
-        for monitor in Monitor.instanceArr : monitor.read()
+        for monitor in get_list_by_type(mySpa, Monitor): monitor.read()
         
         
         # Check problem status and act accordingly
@@ -626,12 +628,12 @@ try:
         if problem_detection.state != problem_detection.last_state:
             if problem_detection.state == True:
                 # Problem is detected -> Switch all gpios off
-                for gpio in Gpio.instanceArr: 
+                for gpio in get_list_by_type(mySpa, Gpio): 
                     gpio.actor = "automation"
                     gpio.write(gpio.payload_off)
             else:
                 # Problem is solved -> Switch all gpios to initial_state
-                for gpio in Gpio.instanceArr: 
+                for gpio in get_list_by_type(mySpa, Gpio): 
                     if gpio.direction == 'output': 
                         gpio.actor = "automation"
                         gpio.write(gpio.initial_state)
@@ -643,15 +645,15 @@ try:
             
             # Timer has elapsed. Republish HA autodiscovery messages
             if debug: print("\nTimer has elapsed. Republishing all HA autodiscovery messages")
-            for gpio    in Gpio.instanceArr    : publish_ha_discovery_info(gpio)
-            for sensor  in Sensor.instanceArr  : publish_ha_discovery_info(sensor)
-            for monitor in Monitor.instanceArr : publish_ha_discovery_info(monitor)
+            for gpio    in get_list_by_type(mySpa, Gpio)    : publish_ha_discovery_info(gpio)
+            for sensor  in get_list_by_type(mySpa, Sensor)  : publish_ha_discovery_info(sensor)
+            for monitor in get_list_by_type(mySpa, Monitor) : publish_ha_discovery_info(monitor)
 
             # Timer has elapsed. Republish all states/values
             if debug: print("\nTimer has elapsed. Republishing all states")
-            for gpio    in Gpio.instanceArr    : gpio.publish()
-            for sensor  in Sensor.instanceArr  : sensor.publish()
-            for monitor in Monitor.instanceArr : monitor.publish()
+            for gpio    in get_list_by_type(mySpa, Gpio)    : gpio.publish()
+            for sensor  in get_list_by_type(mySpa, Sensor)  : sensor.publish()
+            for monitor in get_list_by_type(mySpa, Monitor) : monitor.publish()
             # Republish HA autodiscovery messages
             
         #if debug: print(f"Going to sleep for {config['mqtt']['sleep']} seconds...")
@@ -659,8 +661,10 @@ try:
 
 except KeyboardInterrupt:
     if debug: print("\nSpa Controller: Script halted")
+    mySpa['spa_status'].value = mySpa['spa_status'].payload_on # This will switch on display
     myLCD.clear()
     myLCD.printline(0, "Program stopped!")
+    myLCD.printline(1, "CTRL-C pressed.")
 
 except Exception as e:  
     # this catches ALL other exceptions including errors.  
@@ -674,12 +678,13 @@ except Exception as e:
     #print(exception_traceback)
     #message = "Line{line}:{error}".format(line=exception_traceback.tb_lineno,error=type(e).__name__)
     message = "Line{line}:{errortype}({error})".format(line=exception_traceback.tb_lineno,errortype=type(e).__name__,error=e)
+    mySpa['spa_status'].value = mySpa['spa_status'].payload_on # This will switch on display
+    myLCD.clear()
     myLCD.printmultiline(0, message)
-    pass
-    
+        
 finally:
     # Revert to initial gpio states before quitting
-    for gpio in Gpio.instanceArr:
+    for gpio in get_list_by_type(mySpa, Gpio):
         if gpio.direction == 'output': 
             gpio.actor = "automation"
             gpio.write(gpio.initial_state)
