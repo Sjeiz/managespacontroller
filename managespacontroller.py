@@ -33,13 +33,8 @@ print("Spa Controller: Script started")
 # sudo apt install python3-luma.lcd
 # https://github.com/rm-hull/luma.lcd
 
-#TODO: interrupt driven GPIOS!!!!
-#https://roboticsbackend.com/raspberry-pi-gpio-interrupts-tutorial/
-
-
 
 ### Begin class definitions ###
-#class SpaEntity(object):
 
 class Gpio(object):
     def __init__(self, unique_id, config):
@@ -74,8 +69,8 @@ class Gpio(object):
             self.publish()
 
     def set_io_direction(self):
-        def get_initial_state(self):
-            return self.gpio_on if hasattr(self, 'initial_state') and self.initial_state == 'on' else self.gpio_off
+        #def get_initial_state(self):
+        #    return self.gpio_on if hasattr(self, 'initial_state') and self.initial_state == 'on' else self.gpio_off
 
         if self.direction == 'output':
             GPIO.setup(self.pin, GPIO.OUT)
@@ -109,7 +104,6 @@ class Gpio(object):
         self._value = state
         self.changed_on = datetime.now()
         self.publish()
-
         
         if hasattr(self, "actions_on") and state == self.payload_on:
             for key, value in self.actions_on.items():
@@ -126,10 +120,8 @@ class Gpio(object):
         return
 
     def is_active(self):
-        if self.value == self.payload_on:
-            return True
-        else:
-            return False
+        if self.value == self.payload_on: return True
+        else: return False
         
     def schedule(self):
         if hasattr(self, 'schedule_on_secs') and not(mySpa['spa_operation'].is_active()) and not(mySpa['spa_status'].is_active()):
@@ -147,10 +139,8 @@ class Gpio(object):
                 self.write(self.payload_off)
 
     def status_message(self):
-        if self.value == self.payload_on and hasattr(self,'short_name'):
-            return str(self.short_name)
-        else:
-            return None
+        if self.value == self.payload_on and hasattr(self,'short_name'): return str(self.short_name)
+        else: return None
 
 
 class Sensor(object):
@@ -210,6 +200,9 @@ class Sensor(object):
         match self.sensor_type:
             case "w1sensor":
                 self.value = get_w1sensor_value(sensor)
+            case "_":
+                # Sensor type not defined
+                self.value = None
     
     def publish(self):
         if debug: print(f"Sensor[{self.name}] = {self._value}")
@@ -288,10 +281,8 @@ class Monitor(object):
         client.publish(self.state_topic, self._value)
 
     def is_active(self):
-        if self.value == self.payload_on:
-            return True
-        else:
-            return False
+        if self.value == self.payload_on: return True
+        else: return False
 
 
 class Problem(object):
@@ -333,7 +324,7 @@ class myLCDI2C(liquidcrystal_i2c.LiquidCrystal_I2C):
 
     # overloaded original function
         # add spaces to clear the rest of the line
-        # display off if 
+        # display off if spa not active and no problems found
     def printline(self, linenr, value):
         if value is not None:
             _spaisactive = False
@@ -350,8 +341,7 @@ class myLCDI2C(liquidcrystal_i2c.LiquidCrystal_I2C):
                 self.printstr(value + spaces)
             else:
                 self.off()
-        
-
+ 
     # split the string over multiple lines starting at linenr
     def printmultiline(self, linenr, value):
         if value is not None:
@@ -363,7 +353,7 @@ class myLCDI2C(liquidcrystal_i2c.LiquidCrystal_I2C):
             while len(value) > 0:
                 slice = value[0:self._numcolumns]
                 value = value[self._numcolumns:]
-                self.clearline(line)
+                #self.clearline(line)
                 self.printline(line, slice)
                 line += 1
 
@@ -495,10 +485,20 @@ def publish_ha_discovery_info(entry):
 
 ### End MQTT functions
 
+## Generic functions
+        
 def str2bool(v):
   return v.lower() in ("yes", "true", "t", "1")
 
-        
+
+def get_list_by_type(sensorList, sensorType):
+    # Returns a subset of list based on provided type
+    myReturnList = []
+    for item in sensorList:
+        if type(sensorList[item]) == sensorType: myReturnList.append(sensorList[item])
+    return myReturnList
+
+### End Generic functions
 
 
 ############
@@ -555,26 +555,11 @@ os.system('modprobe w1-therm')
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 
-# class Spa(object):
-#     def __init__(self):
-#         self.name = None
-#         self.type = None
-# mySpa = Spa()
-# mySpa.name = "Test"
-# mySpa.type = "gpio"
-
-mySpa = {}
-
 # Create object instances
+mySpa = {}
 for gpio    in config["gpios"]     : mySpa[gpio] = Gpio(gpio, config['gpios'][gpio])
 for sensor  in config["sensors"]   : mySpa[sensor] = Sensor(sensor, config['sensors'][sensor])
 for monitor in config["monitors"]  : mySpa[monitor] = Monitor(monitor, config['monitors'][monitor])
-
-def get_list_by_type(sensorList, sensorType):
-    myReturnList = []
-    for item in sensorList:
-        if type(sensorList[item]) == sensorType: myReturnList.append(sensorList[item])
-    return myReturnList
 
 # Initialize gpio input/output direction
 for gpio in get_list_by_type(mySpa, Gpio): gpio.set_io_direction()
@@ -688,6 +673,9 @@ finally:
         if gpio.direction == 'output': 
             gpio.actor = "automation"
             gpio.write(gpio.initial_state)
+
+    # Sound alarm
+    #mySpa['spa_buzzer'].value = mySpa['spa_buzzer'].payload_on
     
     # Stop the MQTT loop and disconnect from the MQTT Broker
     if debug: print("\nDisconnect from broker")
