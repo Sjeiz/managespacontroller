@@ -204,7 +204,8 @@ class Sensor(object):
 
     @value.setter
     def value(self, value):
-        if self._value != value: #TODO: dampen minor value changes
+        # if self._value != value: #TODO: dampen minor value changes
+        if self._value is None or self._value+0.1 < value or value < self._value-0.1:
             if debug:
                 print(f"Sensor[{self.name}] = {value}")
             self._value = value
