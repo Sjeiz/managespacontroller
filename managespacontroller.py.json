@@ -283,6 +283,14 @@
 			"scale"        : 0.001,
 			"round_digits" : 1,
 			"offset"       : 0
+		},
+		"spa_timestamp": {
+			"name"         : "Spa Last Update",
+			"device_class" : "timestamp",
+			"config_topic" : "homeassistant/sensor/spa-controller/spa_timestamp/config",
+			"state_topic"  : "spa-controller/spa_timestamp",
+			"sensor_type"  : "timestamp",
+			"value_template" : "{{ strptime(value[:-1] + '-+0200' if value[12] == 'S' else value[:-1] + '-+0100', '%y%m%d%H%M%S-%z') }}"
 		}
 	},
 	"monitors": {
@@ -330,14 +338,14 @@
 			"config_topic" : "homeassistant/binary_sensor/spa-controller/spa_operation/config",
 			"state_topic"  : "spa-controller/spa_operation",
 			"monitor"      : {
-								"check_01": "state_on_ignore_automation, spa_pump1",
-								"check_02": "state_on_ignore_automation, spa_pump2",
-								"check_03": "state_on_ignore_automation, spa_pump3",
-								"check_04": "state_on_ignore_automation, spa_pump4",
-								"check_05": "state_on_ignore_automation, spa_circulation",
-								"check_06": "state_on_ignore_automation, spa_ozonator",
-								"check_07": "state_on_ignore_automation, spa_lights",
-								"check_08": "state_on_ignore_automation, spa_blower"
+								"check_01": "state_on, spa_pump1",
+								"check_02": "state_on, spa_pump2",
+								"check_03": "state_on, spa_pump3",
+								"check_04": "state_on, spa_pump4",
+								"check_05": "state_on, spa_circulation",
+								"check_06": "state_on, spa_ozonator",
+								"check_07": "state_on, spa_lights",
+								"check_08": "state_on, spa_blower"
 							 },
 			"payload_on"   : "on",
 			"payload_off"  : "standby"
