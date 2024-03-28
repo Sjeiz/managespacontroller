@@ -139,7 +139,7 @@ class Gpio(object):
         return
 
     def is_active(self):
-        if self.value == self.payload_on:
+        if self.value == self.payload_on and self.actor != "automation":
             return True
         else:
             return False
@@ -501,6 +501,23 @@ class myLCDI2C(liquidcrystal_i2c.LiquidCrystal_I2C):
             self.printlinejustified(0, self._statusmessage, self._activity_dot)
 
 
+class SpaController():  # subscriptable
+    def __init__(self):
+        # self._activity_dot = " "
+
+        # Create object instances
+        # mySpa = {}
+        for gpio in config["gpios"]:
+            self.__dict__[gpio] = Gpio(gpio, config["gpios"][gpio])
+        for sensor in config["sensors"]:
+            self.__dict__[sensor] = Sensor(sensor, config["sensors"][sensor])
+        for monitor in config["monitors"]:
+            self.__dict__[monitor] = Monitor(
+                monitor, config["monitors"][monitor])
+
+    def __getitem__(self, item):
+        return self.Fruits[item]
+
 ### End class definitions ###
 
 
@@ -573,6 +590,10 @@ def on_message(client, userdata, msg):
         print(f"\nMessage received: {target=}, {value=}, {qos=}")
     mySpa[target].actor = "user"
     mySpa[target].write(value)
+    # XXX
+    # if value == mySpa[target].payload_on:
+    #    mySpa[]
+
     return
 
 
@@ -672,7 +693,16 @@ GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 
 # Create object instances
+# xxx https://stackoverflow.com/questions/1325673/how-to-add-property-to-a-class-dynamically
+# mySpa = SpaController()
 mySpa = {}
+for gpio in config["gpios"]:
+    mySpa[gpio] = Gpio(gpio, config["gpios"][gpio])
+for sensor in config["sensors"]:
+    mySpa[sensor] = Sensor(sensor, config["sensors"][sensor])
+for monitor in config["monitors"]:
+    mySpa[monitor] = Monitor(monitor, config["monitors"][monitor])
+
 for gpio in config["gpios"]:
     mySpa[gpio] = Gpio(gpio, config["gpios"][gpio])
 for sensor in config["sensors"]:
