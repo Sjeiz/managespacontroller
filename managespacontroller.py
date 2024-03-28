@@ -154,7 +154,8 @@ class Gpio(object):
             seconds_off = self.schedule_off_secs + randrange(
                 10
             )  # Add some random time to prevent all pumps from switching on at the same time
-            if not (self.is_active()) and datetime.now() > self._changed_on + timedelta(
+            # Note: Do not use the IsActive function, because it doesn't work if set by automation
+            if not (self._value == self.payload_on) and datetime.now() > self._changed_on + timedelta(
                 seconds=seconds_off
             ):
                 # Start ON schedule
@@ -163,7 +164,7 @@ class Gpio(object):
                         f"Gpio[{self.name}] *** Starting ON schedule for {seconds_on} seconds")
                 self.actor = "automation"
                 self.write(self.payload_on)
-            elif self.is_active() and datetime.now() > self._changed_on + timedelta(
+            elif self._value == self.payload_on and datetime.now() > self._changed_on + timedelta(
                 seconds=seconds_on
             ):
                 # Start OFF schedule
