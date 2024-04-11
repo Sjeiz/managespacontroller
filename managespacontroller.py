@@ -3,7 +3,7 @@ import paho.mqtt.client as MQTT
 import paho.mqtt.reasoncodes as reasoncodes
 import paho.mqtt.packettypes as packettypes
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import weakref
 import sys
@@ -251,7 +251,10 @@ class Sensor(object):
             case "w1sensor":
                 self.value = get_w1sensor_value(sensor)
             case "timestamp":
-                self._value = datetime.now().strftime("%-y%m%d%H%M%SW")
+                datestr = "%-y%m%d%H%M%S"
+                datestr += "W" if time.daylight == 0 else "S"  # S=summer time, W=winter time
+                self._value = datetime.now().strftime(datestr)
+                pass
             case "_":
                 # Sensor type not defined
                 self.value = None
