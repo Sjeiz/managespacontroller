@@ -134,8 +134,9 @@ class Gpio(object):
             # Publish payload
             client.publish(self.state_topic, self._value)
             # Publish timestamp
-            client.publish(mySpa["spa_timestamp"].state_topic,
-                           mySpa["spa_timestamp"]._value)
+            client.publish(
+                mySpa["spa_timestamp"].state_topic, mySpa["spa_timestamp"]._value
+            )
         return
 
     def is_active(self):
@@ -155,17 +156,19 @@ class Gpio(object):
                 10
             )  # Add some random time to prevent all pumps from switching on at the same time
             # Note: Do not use the IsActive function, because it doesn't work if set by automation
-            if not (self._value == self.payload_on) and datetime.now() > self._changed_on + timedelta(
-                seconds=seconds_off
-            ):
+            if not (
+                self._value == self.payload_on
+            ) and datetime.now() > self._changed_on + timedelta(seconds=seconds_off):
                 # Start ON schedule
                 if debug:
                     print(
-                        f"Gpio[{self.name}] *** Starting ON schedule for {seconds_on} seconds")
+                        f"Gpio[{self.name}] *** Starting ON schedule for {seconds_on} seconds"
+                    )
                 self.actor = "automation"
                 self.write(self.payload_on)
-            elif self._value == self.payload_on and datetime.now() > self._changed_on + timedelta(
-                seconds=seconds_on
+            elif (
+                self._value == self.payload_on
+                and datetime.now() > self._changed_on + timedelta(seconds=seconds_on)
             ):
                 # Start OFF schedule
                 if debug:
@@ -187,8 +190,7 @@ class Sensor(object):
         # Add all attributes from config file
         for key, value in config.items():
             if debug:
-                print(
-                    f"Initializing Sensor[{config['name']}][{key}] = {value}")
+                print(f"Initializing Sensor[{config['name']}][{key}] = {value}")
             setattr(self, key, value)
 
         # Add additional attributes
@@ -206,7 +208,11 @@ class Sensor(object):
     @value.setter
     def value(self, value):
         # if self._value != value: #TODO: dampen minor value changes
-        if self._value is None or self._value+0.1 < value or value < self._value-0.1:
+        if (
+            self._value is None
+            or self._value + 0.1 < value
+            or value < self._value - 0.1
+        ):
             if debug:
                 print(f"Sensor[{self.name}] = {value}")
             self._value = value
@@ -230,7 +236,7 @@ class Sensor(object):
                     lines = read_w1sensor_file()
                 equals_pos = lines[1].find("t=")
                 if equals_pos != -1:
-                    value = (lines[1][equals_pos + 2:]).strip()
+                    value = (lines[1][equals_pos + 2 :]).strip()
                     if value.isnumeric():
                         value = float(value)
                         if hasattr(sensor, "scale"):
@@ -252,7 +258,9 @@ class Sensor(object):
                 self.value = get_w1sensor_value(sensor)
             case "timestamp":
                 datestr = "%-y%m%d%H%M%S"
-                datestr += "W" if time.daylight == 0 else "S"  # S=summer time, W=winter time
+                datestr += (
+                    "W" if time.daylight == 0 else "S"
+                )  # S=summer time, W=winter time
                 self._value = datetime.now().strftime(datestr)
                 pass
             case "_":
@@ -266,8 +274,9 @@ class Sensor(object):
             # Publish payload
             client.publish(self.state_topic, self._value)
             # Publish timestamp
-            client.publish(mySpa["spa_timestamp"].state_topic,
-                           mySpa["spa_timestamp"]._value)
+            client.publish(
+                mySpa["spa_timestamp"].state_topic, mySpa["spa_timestamp"]._value
+            )
 
 
 class Monitor(object):
@@ -275,8 +284,7 @@ class Monitor(object):
         # Add all attributes from config file
         for key, value in config.items():
             if debug:
-                print(
-                    f"Initializing Monitor[{config['name']}][{key}] = {value}")
+                print(f"Initializing Monitor[{config['name']}][{key}] = {value}")
             setattr(self, key, value)
 
         # Add additional attributes
@@ -309,8 +317,7 @@ class Monitor(object):
             monitorarr = value.split(",")
             check2perform = monitorarr[0].strip()
             sensor2check = monitorarr[1].strip()
-            value2check = None if len(
-                monitorarr) < 3 else monitorarr[2].strip()
+            value2check = None if len(monitorarr) < 3 else monitorarr[2].strip()
 
             match check2perform:
                 case "state_on":
@@ -373,8 +380,9 @@ class Monitor(object):
         # Publish payload
         client.publish(self.state_topic, self._value)
         # Publish timestamp
-        client.publish(mySpa["spa_timestamp"].state_topic,
-                       mySpa["spa_timestamp"]._value)
+        client.publish(
+            mySpa["spa_timestamp"].state_topic, mySpa["spa_timestamp"]._value
+        )
 
     def is_active(self):
         if self.value == self.payload_on:
@@ -403,11 +411,9 @@ class Problem(object):
         self.state = new_state
         if self.state:
             if myLCD._activity_dot != " ":
-                GPIO.output(mySpa["spa_buzzer"].pin,
-                            mySpa["spa_buzzer"].gpio_on)
+                GPIO.output(mySpa["spa_buzzer"].pin, mySpa["spa_buzzer"].gpio_on)
             else:
-                GPIO.output(mySpa["spa_buzzer"].pin,
-                            mySpa["spa_buzzer"].gpio_off)
+                GPIO.output(mySpa["spa_buzzer"].pin, mySpa["spa_buzzer"].gpio_off)
             myLCD._statusmessage = problem
             myLCD.printstatusmessage()
         else:
@@ -456,8 +462,8 @@ class myLCDI2C(liquidcrystal_i2c.LiquidCrystal_I2C):
                 self.clearline(i)
             # split the messaage and display on multiple lines
             while len(value) > 0:
-                slice = value[0: self._numcolumns]
-                value = value[self._numcolumns:]
+                slice = value[0 : self._numcolumns]
+                value = value[self._numcolumns :]
                 # self.clearline(line)
                 self.printline(line, slice)
                 line += 1
@@ -468,8 +474,7 @@ class myLCDI2C(liquidcrystal_i2c.LiquidCrystal_I2C):
 
     def printlinejustified(self, linenr, valueleft, valueright):
         if valueleft is not None and valueright is not None:
-            spaces = " " * (self._numcolumns -
-                            len(valueleft) - len(valueright))
+            spaces = " " * (self._numcolumns - len(valueleft) - len(valueright))
             message = valueleft + spaces + valueright
             self.printline(linenr, message)
 
@@ -505,7 +510,7 @@ class myLCDI2C(liquidcrystal_i2c.LiquidCrystal_I2C):
             self.printlinejustified(0, self._statusmessage, self._activity_dot)
 
 
-class SpaController():  # subscriptable
+class SpaController:  # subscriptable
     def __init__(self):
         # self._activity_dot = " "
 
@@ -516,11 +521,11 @@ class SpaController():  # subscriptable
         for sensor in config["sensors"]:
             self.__dict__[sensor] = Sensor(sensor, config["sensors"][sensor])
         for monitor in config["monitors"]:
-            self.__dict__[monitor] = Monitor(
-                monitor, config["monitors"][monitor])
+            self.__dict__[monitor] = Monitor(monitor, config["monitors"][monitor])
 
     def __getitem__(self, item):
         return self.Fruits[item]
+
 
 ### End class definitions ###
 
@@ -551,8 +556,7 @@ def on_connect(client, userdata, flags, rc, other):
         )
         # Subscribe to messages
         if debug:
-            print("Subscribe to mqtt messages: " +
-                  config["mqtt"]["subscribe_topic"])
+            print("Subscribe to mqtt messages: " + config["mqtt"]["subscribe_topic"])
         client.subscribe(config["mqtt"]["subscribe_topic"])
 
         # publish_ha_autodiscovery(config, client)
@@ -826,8 +830,9 @@ try:
                 qos=config["mqtt"]["qos"],
             )
             # Publish timestamp
-            client.publish(mySpa["spa_timestamp"].state_topic,
-                           mySpa["spa_timestamp"]._value)
+            client.publish(
+                mySpa["spa_timestamp"].state_topic, mySpa["spa_timestamp"]._value
+            )
             for gpio in get_list_by_type(mySpa, Gpio):
                 publish_ha_discovery_info(gpio)
             for sensor in get_list_by_type(mySpa, Sensor):
@@ -900,9 +905,7 @@ finally:
         qos=config["mqtt"]["qos"],
     )
     # Publish timestamp
-    client.publish(mySpa["spa_timestamp"].state_topic,
-                   mySpa["spa_timestamp"]._value)
+    client.publish(mySpa["spa_timestamp"].state_topic, mySpa["spa_timestamp"]._value)
     client.disconnect(
-        reasoncodes.ReasonCodes(
-            packettypes.PacketTypes.DISCONNECT, "Disconnect", 4)
+        reasoncodes.ReasonCodes(packettypes.PacketTypes.DISCONNECT, "Disconnect", 4)
     )

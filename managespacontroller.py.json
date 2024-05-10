@@ -240,6 +240,19 @@
 			"gpio_on": 1,
 			"gpio_off": 0
 		},
+		"spa_water_flow": {
+			"name": "Spa Water Flow",
+			"direction": "input",
+			"pin": 10,
+			"device_class": "switch",
+			"config_topic": "homeassistant/binary_sensor/spa-controller/spa_water_flow/config",
+			"state_topic": "spa-controller/spa_water_flow",
+			"pull_up_down": "down",
+			"payload_on": "on",
+			"payload_off": "off",
+			"gpio_on": 1,
+			"gpio_off": 0
+		},
 		"spa_buzzer": {
 			"name": "Spa Buzzer",
 			"direction": "output",
@@ -258,7 +271,7 @@
 			"config_topic": "homeassistant/sensor/spa-controller/spa_temp_1/config",
 			"state_topic": "spa-controller/spa_temp_1",
 			"sensor_type": "w1sensor",
-			"filename": "/sys/bus/w1/devices/28-1da3d4431598/w1_slave",
+			"filename": "/sys/bus/w1/devices/28-3c01e076e697/w1_slave",
 			"scale": 0.001,
 			"round_digits": 1,
 			"offset": 0
@@ -280,7 +293,7 @@
 			"config_topic": "homeassistant/sensor/spa-controller/spa_temp_3/config",
 			"state_topic": "spa-controller/spa_temp_3",
 			"sensor_type": "w1sensor",
-			"filename": "/sys/bus/w1/devices/28-73dad4436f52/w1_slave",
+			"filename": "/sys/bus/w1/devices/28-3c01e076e4f2/w1_slave",
 			"scale": 0.001,
 			"round_digits": 1,
 			"offset": 0
