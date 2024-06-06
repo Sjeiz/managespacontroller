@@ -212,7 +212,8 @@ class Sensor(object):
             self._value is None
             # or self._value + 0.1 < value
             # or value < self._value - 0.1
-            or self.value != value
+            or round(self.value, sensor.round_digits)
+            != round(value, sensor.round_digits)
         ):
             if debug:
                 print(f"Sensor[{self.name}] = {value}")
