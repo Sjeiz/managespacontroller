@@ -210,8 +210,9 @@ class Sensor(object):
         # if self._value != value: #TODO: dampen minor value changes
         if (
             self._value is None
-            or self._value + 0.1 < value
-            or value < self._value - 0.1
+            # or self._value + 0.1 < value
+            # or value < self._value - 0.1
+            or self.value != value
         ):
             if debug:
                 print(f"Sensor[{self.name}] = {value}")
