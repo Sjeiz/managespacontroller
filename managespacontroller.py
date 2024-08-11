@@ -29,7 +29,7 @@ print("Spa Controller: Script started")
 # To follow messages: journalctl -u managespacontroller.service -f
 # To stop the messages, set the debug parameter False in the config file
 
-# To restart the script: sudo systemctl managespacontroller.service
+# To restart the script: sudo systemctl restart managespacontroller.service
 
 # sudo apt install python3-luma.lcd
 # https://github.com/rm-hull/luma.lcd
