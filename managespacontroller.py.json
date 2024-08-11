@@ -21,7 +21,7 @@
 		},
 		"sleep": 0.1,
 		"republish_sec": 60,
-		"debug": "True"
+		"debug": "false"
 	},
 	"gpios": {
 		"spa_heatpump": {
@@ -326,8 +326,7 @@
 			"config_topic": "homeassistant/binary_sensor/spa-controller/spa_status_temp/config",
 			"state_topic": "spa-controller/spa_status/spa_status_temp",
 			"monitor": {
-				"check_01": "value_greater, spa_temp_1, 39",
-				"check_02": "value_greater, spa_temp_2, 39"
+				"check_01": "value_greater, spa_temp_1, 45"
 			},
 			"payload_on": "problem",
 			"payload_off": "ok",
