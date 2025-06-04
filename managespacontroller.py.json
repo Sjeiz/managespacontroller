@@ -21,7 +21,7 @@
 		},
 		"sleep": 0.1,
 		"republish_sec": 60,
-		"debug": "false"
+		"debug": "true"
 	},
 	"gpios": {
 		"spa_heatpump": {
