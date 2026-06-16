@@ -212,8 +212,8 @@ class Sensor(object):
             self._value is None
             # or self._value + 0.1 < value
             # or value < self._value - 0.1
-            or round(self.value, sensor.round_digits)
-            != round(value, sensor.round_digits)
+            or round(self._value, getattr(self, "round_digits", 1))
+            != round(value, getattr(self, "round_digits", 1))
         ):
             if debug:
                 print(f"Sensor[{self.name}] = {value}")
@@ -235,7 +235,7 @@ class Sensor(object):
                 lines = read_w1sensor_file(sensor.filename)
                 while lines[0].strip()[-3:] != "YES":
                     time.sleep(0.2)
-                    lines = read_w1sensor_file()
+                    lines = read_w1sensor_file(sensor.filename)
                 equals_pos = lines[1].find("t=")
                 if equals_pos != -1:
                     value = (lines[1][equals_pos + 2 :]).strip()
@@ -257,7 +257,7 @@ class Sensor(object):
 
         match self.sensor_type:
             case "w1sensor":
-                self.value = get_w1sensor_value(sensor)
+                self.value = get_w1sensor_value(self)
             case "timestamp":
                 datestr = "%-y%m%d%H%M%S"
                 datestr += (
@@ -265,7 +265,7 @@ class Sensor(object):
                 )  # S=summer time, W=winter time
                 self._value = datetime.now().strftime(datestr)
                 pass
-            case "_":
+            case _:
                 # Sensor type not defined
                 self.value = None
 
@@ -364,7 +364,7 @@ class Monitor(object):
                         sensor2check
                     ]._changed_on + timedelta(seconds=int(value2check)):
                         status = self.payload_on
-                case "_":
+                case _:
                     if debug:
                         print(
                             f"ERROR! Unknown monitor command ({check2perform}) defined for {mySpa[sensor2check].name}"
@@ -512,21 +512,21 @@ class myLCDI2C(liquidcrystal_i2c.LiquidCrystal_I2C):
             self.printlinejustified(0, self._statusmessage, self._activity_dot)
 
 
-class SpaController:  # subscriptable
-    def __init__(self):
-        # self._activity_dot = " "
+# class SpaController:  # subscriptable
+#     def __init__(self):
+#         # self._activity_dot = " "
 
-        # Create object instances
-        # mySpa = {}
-        for gpio in config["gpios"]:
-            self.__dict__[gpio] = Gpio(gpio, config["gpios"][gpio])
-        for sensor in config["sensors"]:
-            self.__dict__[sensor] = Sensor(sensor, config["sensors"][sensor])
-        for monitor in config["monitors"]:
-            self.__dict__[monitor] = Monitor(monitor, config["monitors"][monitor])
+#         # Create object instances
+#         # mySpa = {}
+#         for gpio in config["gpios"]:
+#             self.__dict__[gpio] = Gpio(gpio, config["gpios"][gpio])
+#         for sensor in config["sensors"]:
+#             self.__dict__[sensor] = Sensor(sensor, config["sensors"][sensor])
+#         for monitor in config["monitors"]:
+#             self.__dict__[monitor] = Monitor(monitor, config["monitors"][monitor])
 
-    def __getitem__(self, item):
-        return self.Fruits[item]
+#     def __getitem__(self, item):
+#         return self.Fruits[item]
 
 
 ### End class definitions ###
@@ -706,13 +706,6 @@ GPIO.setwarnings(False)
 # xxx https://stackoverflow.com/questions/1325673/how-to-add-property-to-a-class-dynamically
 # mySpa = SpaController()
 mySpa = {}
-for gpio in config["gpios"]:
-    mySpa[gpio] = Gpio(gpio, config["gpios"][gpio])
-for sensor in config["sensors"]:
-    mySpa[sensor] = Sensor(sensor, config["sensors"][sensor])
-for monitor in config["monitors"]:
-    mySpa[monitor] = Monitor(monitor, config["monitors"][monitor])
-
 for gpio in config["gpios"]:
     mySpa[gpio] = Gpio(gpio, config["gpios"][gpio])
 for sensor in config["sensors"]:
