@@ -244,7 +244,7 @@
 			"name": "Spa Water Flow",
 			"direction": "input",
 			"pin": 10,
-			"device_class": "",
+			"device_class": "running",
 			"config_topic": "homeassistant/binary_sensor/spa-controller/spa_water_flow/config",
 			"state_topic": "spa-controller/spa_water_flow",
 			"pull_up_down": "down",
