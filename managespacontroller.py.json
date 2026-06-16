@@ -268,6 +268,7 @@
 		"spa_temp_1": {
 			"name": "Water Temp",
 			"device_class": "temperature",
+			"unit_of_measurement": "°C",
 			"config_topic": "homeassistant/sensor/spa-controller/spa_temp_1/config",
 			"state_topic": "spa-controller/spa_temp_1",
 			"sensor_type": "w1sensor",
@@ -279,6 +280,7 @@
 		"spa_temp_2": {
 			"name": "HeatPump Temp",
 			"device_class": "temperature",
+			"unit_of_measurement": "°C",
 			"config_topic": "homeassistant/sensor/spa-controller/spa_temp_2/config",
 			"state_topic": "spa-controller/spa_temp_2",
 			"sensor_type": "w1sensor",
@@ -290,6 +292,7 @@
 		"spa_temp_3": {
 			"name": "Air Temp",
 			"device_class": "temperature",
+			"unit_of_measurement": "°C",
 			"config_topic": "homeassistant/sensor/spa-controller/spa_temp_3/config",
 			"state_topic": "spa-controller/spa_temp_3",
 			"sensor_type": "w1sensor",

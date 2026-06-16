@@ -629,6 +629,8 @@ def publish_ha_discovery_info(entry):
             payload_dict.update({"payload_on": entry.payload_on})
         if hasattr(entry, "value_template"):
             payload_dict.update({"value_template": entry.value_template})
+        if hasattr(entry, "unit_of_measurement"):
+            payload_dict.update({"unit_of_measurement": entry.unit_of_measurement})
 
         # Merge device_dict and payload_dict
         device_dict.update(payload_dict)
