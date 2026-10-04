@@ -90,9 +90,6 @@
 			"schedule_off_secs": 86400,
 			"actions_on": {
 				"spa_heatpump": "on",
-				"spa_pump2": "on",
-				"spa_pump3": "on",
-				"spa_pump4": "on",
 				"spa_circulation": "on",
 				"spa_lights": "on"
 			},
