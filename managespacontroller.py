@@ -77,7 +77,8 @@ class Gpio(object):
         #    return self.gpio_on if hasattr(self, 'initial_state') and self.initial_state == 'on' else self.gpio_off
 
         if self.direction == "output":
-            GPIO.setup(self.pin, GPIO.OUT)
+            # Drive the off-level before switching to output, so active-low relays don't pulse on at startup
+            GPIO.setup(self.pin, GPIO.OUT, initial=self.gpio_off)
         else:
             if hasattr(self, "pull_up_down"):
                 match self.pull_up_down:
