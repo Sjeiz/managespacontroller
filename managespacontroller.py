@@ -141,6 +141,9 @@ class Gpio(object):
         return
 
     def is_active(self):
+        # Inputs are sensors: their state counts regardless of actor
+        if self.direction == "input":
+            return self.value == self.payload_on
         if self.value == self.payload_on and self.actor != "automation":
             return True
         else:
