@@ -237,6 +237,7 @@ check("frost: heater refused (would switch heat pump off)", "spa_heater" not in 
 spa.handle_command("spa_circulation", "off", t + 5)
 spa.handle_command("spa_session", "on", t + 6)
 check("frost + session: reported Session", spa.operation_sensor.value == "Session")
+check("frost + session: Spa Status still Frost", status.state == "Frost")
 spa.handle_command("spa_session", "off", t + 7)
 check("session off during frost: reported Frost, heat pump on", spa.operation_sensor.value == "Frost" and on() == ["spa_heatpump"])
 GPIO.inputs[12] = 0
