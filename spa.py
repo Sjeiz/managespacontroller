@@ -16,12 +16,13 @@ ACTIVE = "Active"  # reported for the Session state
 
 
 class Spa:
-    def __init__(self, config, entities, session_switch, operation_sensor, status_sensor, publisher):
+    def __init__(self, config, entities, session_switch, operation_sensor, status_sensor, response_sensor, publisher):
         """entities: dict unique_id -> entity (outputs, inputs, sensors, monitors)."""
         self.entities = entities
         self.session_switch = session_switch
         self.operation_sensor = operation_sensor
         self.status_sensor = status_sensor
+        self.response_sensor = response_sensor
         self._publisher = publisher
 
         # Only outputs with a command topic are spa outputs; internal outputs (buzzer,
@@ -108,6 +109,9 @@ class Spa:
             log.warning("Command for unknown target %s ignored", target)
             self._refusal = f"unknown target {target}"
         self._command_target = None
+        result = "OK" if self._refusal is None else f"refused ({self._refusal})"
+        self.response_sensor.set(f"{target} {payload}: {result}")
+        self._publisher.state(self.response_sensor)
         return self._refusal
 
     def handle_reading(self, uid, value):

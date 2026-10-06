@@ -123,6 +123,7 @@ A monitor with `force_on` keeps that output on while it is active; switching it 
 
   `Active`, `Maintenance` and `Standby` follow the state machine; `Error`, `Frost` and `Manual` are reporting only.
 - **Spa Status:** sensor with the `warning` of the first active monitor in config order, or `Normal`. The attribute `active` lists all active warnings. The monitors themselves are not separate entities.
+- **Spa Response:** text sensor with the response to the last command from HA or the web page, e.g. `<target> on: OK` or `<target> on: refused (<reason>)`. The time is an attribute (`time`), so a repeated identical response still counts as an update; on a dashboard use `last-updated` for "xx ago".
 - Outputs, sensors and the water level input: each its own entity.
 
 ### Web page
@@ -153,13 +154,13 @@ Between measurements the last reading is kept. The first measurement runs at sta
 - Water level sensor: `power` (the output that powers it) and settle time.
 - Per monitor (order = Spa Status priority): `warning` (Spa Status value), limit and, for value checks, hysteresis; optional `force_on` (output kept on while active) and `unknown_active` (an unknown value counts as true).
 - Section `web`: port of the web page.
-- Section `spa`: Session switch, `spa_operation` and Spa Status sensors (HA fields), circulation output, session list, maintenance list (lists of steps; outputs in one step switch on together), stagger delay, maintenance times (list of clock times, e.g. `["06:00", "18:00"]`), flush time, circulation duration, status log interval.
+- Section `spa`: Session switch, `spa_operation`, Spa Status and Spa Response sensors (HA fields), circulation output, session list, maintenance list (lists of steps; outputs in one step switch on together), stagger delay, maintenance times (list of clock times, e.g. `["06:00", "18:00"]`), flush time, circulation duration, status log interval.
 
 ### Code structure
 | Module | Contents |
 |---|---|
 | `managespacontroller.py` | `main()`: read config, build objects, main loop (service entry point). MQTT connects asynchronously and keeps retrying, so a broker that is down does not stop the controller. |
-| `entities.py` | Publisher (MQTT states, attributes and discovery), base class Entity (name, `unique_id`, topics, discovery payload), Output, Input, WaterLevelSensor (Input with power output), TemperatureSensor, TimestampSensor, Monitor, SessionSwitch, OperationSensor, StatusSensor |
+| `entities.py` | Publisher (MQTT states, attributes and discovery), base class Entity (name, `unique_id`, topics, discovery payload), Output, Input, WaterLevelSensor (Input with power output), TemperatureSensor, TimestampSensor, Monitor, SessionSwitch, OperationSensor, StatusSensor, ResponseSensor |
 | `spa.py` | The state machine (state, transitions, lists, timers, rules), the fault interlock and frost protection; owns all entities; all commands go through it |
 | `webserver.py`, `webserver.html` | Web page: HTTP server in its own thread (status snapshot from the main loop, commands via the queue) and the page itself |
 | `display.py` | LCD and buzzer; gets its information from the Spa. The LCD is optional: if it is missing at startup or fails later, the controller keeps running, logs it once and retries every 60 s. The buzzer does not depend on the LCD. |

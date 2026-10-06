@@ -26,6 +26,7 @@ from entities import (
     OperationSensor,
     Output,
     Publisher,
+    ResponseSensor,
     SessionSwitch,
     StatusSensor,
     TemperatureSensor,
@@ -166,7 +167,8 @@ def main():
     operation_sensor = OperationSensor("spa_operation", spa_config["operation_sensor"])
     monitors = [e for e in entities.values() if isinstance(e, Monitor)]
     status_sensor = StatusSensor("spa_status", spa_config["status_sensor"], monitors)
-    spa = Spa(spa_config, entities, session_switch, operation_sensor, status_sensor, publisher)
+    response_sensor = ResponseSensor("spa_response", spa_config["response_sensor"])
+    spa = Spa(spa_config, entities, session_switch, operation_sensor, status_sensor, response_sensor, publisher)
 
     temperature_sensors = [e for e in entities.values() if isinstance(e, TemperatureSensor)]
     display = Display(
@@ -198,7 +200,7 @@ def main():
     for event in pending:
         events.put(event)
 
-    extra = [session_switch, operation_sensor, status_sensor]
+    extra = [session_switch, operation_sensor, status_sensor, response_sensor]
     republished_at = time.monotonic()
     status_log_secs = float(spa_config.get("status_log_secs", 300))
     log.info(spa.status_line())

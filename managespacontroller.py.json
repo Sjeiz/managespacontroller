@@ -293,6 +293,11 @@
 			"config_topic": "homeassistant/sensor/spa-controller/spa_status/config",
 			"state_topic": "spa-controller/spa_status"
 		},
+		"response_sensor": {
+			"name": "Spa Response",
+			"config_topic": "homeassistant/sensor/spa-controller/spa_response/config",
+			"state_topic": "spa-controller/spa_response"
+		},
 		"circulation": "spa_circulation",
 		"session_list": [
 			[

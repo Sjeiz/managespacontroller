@@ -33,7 +33,7 @@ sys.modules["smbus"] = types.ModuleType("smbus")
 
 import managespacontroller as mc  # noqa: E402
 from display import Display  # noqa: E402
-from entities import Monitor, OperationSensor, SessionSwitch, StatusSensor  # noqa: E402
+from entities import Monitor, OperationSensor, ResponseSensor, SessionSwitch, StatusSensor  # noqa: E402
 from spa import Spa  # noqa: E402
 
 
@@ -57,8 +57,10 @@ sc = config["spa"]
 monitors = [e for e in entities.values() if isinstance(e, Monitor)]
 spa = Spa(sc, entities, SessionSwitch("spa_session", sc["session_switch"]),
           OperationSensor("spa_operation", sc["operation_sensor"]),
-          StatusSensor("spa_status", sc["status_sensor"], monitors), pub)
+          StatusSensor("spa_status", sc["status_sensor"], monitors),
+          ResponseSensor("spa_response", sc["response_sensor"]), pub)
 status = spa.status_sensor
+response = spa.response_sensor
 O = spa.outputs
 failed = False
 
@@ -113,7 +115,11 @@ check("session off: only heat pump, Standby, switch off", on() == ["spa_heatpump
 
 r = spa.switch("spa_heater", True)
 check("heater refused without circulation", not r and "spa_heater" not in on())
+spa.handle_command("spa_heater", "on", t + 29)
+check("Spa Response: refused command with reason", response.state == "spa_heater on: refused (requires spa_circulation)")
+first_time = response.attributes()["time"]
 spa.handle_command("spa_circulation", "on", t + 30)
+check("Spa Response: OK for a successful command", response.state == "spa_circulation on: OK")
 spa.handle_command("spa_heater", "on", t + 31)
 check("heater on -> heat pump off", "spa_heater" in on() and "spa_heatpump" not in on())
 spa.handle_command("spa_circulation", "off", t + 32)
@@ -323,6 +329,16 @@ except Exception:
     ok = False
 check("display lost during operation: no exception, marked unavailable", ok and dd._lcd is None)
 spa.handle_command("spa_session", "off", t + 25)
+
+# ---- Spa Response repeat ----
+import time as _time  # noqa: E402
+spa.handle_command("spa_pump9", "on", t + 50)
+first = (response.state, response.attributes()["time"])
+_time.sleep(1.1)
+spa.handle_command("spa_pump9", "on", t + 51)
+second = (response.state, response.attributes()["time"])
+check("Spa Response: unknown target reported", first[0] == "spa_pump9 on: refused (unknown target spa_pump9)")
+check("Spa Response: repeated identical response gets a new time", first[0] == second[0] and first[1] != second[1])
 
 # ---- web server ----
 import queue  # noqa: E402

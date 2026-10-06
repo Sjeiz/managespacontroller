@@ -4,7 +4,7 @@ import json
 import logging
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 import RPi.GPIO as GPIO
 
@@ -328,6 +328,32 @@ class OperationSensor(Entity):
     def discovery_payload(self):
         payload = super().discovery_payload()
         payload.update({"device_class": "enum", "options": self.OPTIONS})
+        return payload
+
+
+class ResponseSensor(Entity):
+    """Reports the response to the last command (from HA or the web page).
+    The time is an attribute, so a repeated identical response still updates HA."""
+
+    def __init__(self, unique_id, config):
+        super().__init__(unique_id, config)
+        self.value = None
+        self.time = None
+
+    def set(self, value):
+        self.value = value
+        self.time = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    @property
+    def state(self):
+        return self.value
+
+    def attributes(self):
+        return None if self.time is None else {"time": self.time}
+
+    def discovery_payload(self):
+        payload = super().discovery_payload()
+        payload["json_attributes_topic"] = self.state_topic + "/attributes"
         return payload
 
 
