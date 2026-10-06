@@ -315,7 +315,7 @@ class SessionSwitch(BinaryEntity):
 class OperationSensor(Entity):
     """Reports the Spa state to HA as an enum sensor."""
 
-    OPTIONS = ["Standby", "Manual", "Frost", "Session", "Maintenance", "Error"]
+    OPTIONS = ["Standby", "Manual", "Frost", "Active", "Maintenance", "Error"]
 
     def __init__(self, unique_id, config):
         super().__init__(unique_id, config)

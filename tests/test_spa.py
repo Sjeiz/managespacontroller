@@ -100,7 +100,7 @@ check("session: pump1 after 1 s, pump2 not yet", "spa_pump1" in on() and "spa_pu
 for i in range(2, 5):
     spa.tick(t + i, W)
 check("session: pumps 1-3 on after 3 s, no blower", all(f"spa_pump{i}" in on() for i in range(1, 4)) and "spa_blower" not in on())
-check("session: switch on, operation Session", spa.session_switch.is_on and spa.operation_sensor.value == "Session")
+check("session: switch on, operation Active", spa.session_switch.is_on and spa.operation_sensor.value == "Active")
 
 spa.tick(t + 10, datetime(2026, 10, 7, 14, 0))
 check("maintenance time during session: nothing", spa.state == "Session")
@@ -236,7 +236,7 @@ spa.handle_command("spa_heater", "on", t + 4)
 check("frost: heater refused (would switch heat pump off)", "spa_heater" not in on() and "spa_heatpump" in on())
 spa.handle_command("spa_circulation", "off", t + 5)
 spa.handle_command("spa_session", "on", t + 6)
-check("frost + session: reported Session", spa.operation_sensor.value == "Session")
+check("frost + session: reported Active", spa.operation_sensor.value == "Active")
 check("frost + session: Spa Status still Frost", status.state == "Frost")
 spa.handle_command("spa_session", "off", t + 7)
 check("session off during frost: reported Frost, heat pump on", spa.operation_sensor.value == "Frost" and on() == ["spa_heatpump"])

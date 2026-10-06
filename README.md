@@ -121,7 +121,18 @@ A monitor with `force_on` keeps that output on while it is active; switching it 
 
 ### Reporting to HA
 - **Session switch:** on during Session and Maintenance.
-- **`spa_operation`:** sensor showing the highest applicable value: `Error` → `Session` → `Maintenance` → `Frost` (frost protection active) → `Manual` (an output on whose `initial_state` is off) → `Standby`. `Frost` and `Manual` are reporting only, not states.
+- **`spa_operation`:** sensor showing the highest applicable value, in this priority:
+
+  | Value | When |
+  |---|---|
+  | `Error` | Fault interlock active (water level too low or water above 40 °C) |
+  | `Active` | State Session (started with the Session switch) |
+  | `Maintenance` | State Maintenance (clock-started run) |
+  | `Frost` | Frost protection active (outside below 4 °C or unknown) |
+  | `Manual` | Standby with an output on whose `initial_state` is off |
+  | `Standby` | None of the above |
+
+  `Active`, `Maintenance` and `Standby` follow the state machine; `Error`, `Frost` and `Manual` are reporting only.
 - **Spa Status:** sensor with the `warning` of the first active monitor (`WaterLow` → `TempHigh` → `Frost`, the config order) or `Normal`. The attribute `active` lists all active warnings, e.g. `[WaterLow, Frost]`. The monitors themselves are not separate entities.
 - Outputs, sensors and the water level input: each its own entity.
 

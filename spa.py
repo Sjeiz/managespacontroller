@@ -12,6 +12,7 @@ MAINTENANCE = "Maintenance"
 ERROR = "Error"
 MANUAL = "Manual"  # reported only: Standby with an output on that is off by default
 FROST = "Frost"  # reported only: a force_on monitor (frost protection) is active
+ACTIVE = "Active"  # reported for the Session state
 
 
 class Spa:
@@ -318,9 +319,11 @@ class Spa:
 
     def operation(self):
         """Value reported as spa_operation."""
-        # Display priority: Error, Session, Maintenance, Frost, Manual, Standby
+        # Display priority: Error, Active (Session), Maintenance, Frost, Manual, Standby
         if self.fault:
             return ERROR
+        if self.state == SESSION:
+            return ACTIVE
         if self.state != STANDBY:
             return self.state
         if any(m.is_on and m.force_on for m in self.monitors):
