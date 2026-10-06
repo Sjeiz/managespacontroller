@@ -106,9 +106,12 @@ A blocking layer above the state machine; the state machine itself has no fault 
 2. **While active:** every switch-on is refused, whether from the Session switch, a maintenance time or manual control. Exempt: the buzzer and the water level sensor's power output (otherwise the water level could never be measured again and the fault would never clear).
 3. **Cleared:** every output to its `initial_state`, as at controller start.
 
-Monitors:
-- water level: problem when the water is too low;
-- water temperature: problem above 40 °C, cleared below 39.5 °C.
+Monitors (in config order):
+- water level (`WaterLow`): problem when the water is too low;
+- water temperature (`TempHigh`): problem above 40 °C, cleared below 39.5 °C;
+- frost (`Frost`): see [Frost protection](#frost-protection).
+
+**The order of the blocks under `monitors` in the config is the priority of Spa Status: the first active monitor wins.** To change the priority, move the blocks. A monitor may also check monitors defined above it.
 
 Each monitor that compares a value has its own hysteresis, so sensor jitter around the limit does not toggle the fault.
 
@@ -119,7 +122,8 @@ A monitor with `force_on` keeps that output on while it is active; switching it 
 ### Reporting to HA
 - **Session switch:** on during Session and Maintenance.
 - **`spa_operation`:** sensor showing the highest applicable value: `Error` → `Session` → `Maintenance` → `Frost` (frost protection active) → `Manual` (an output on whose `initial_state` is off) → `Standby`. `Frost` and `Manual` are reporting only, not states.
-- Outputs, sensors, water level and monitors: each its own entity.
+- **Spa Status:** sensor with the `warning` of the first active monitor (`WaterLow` → `TempHigh` → `Frost`, the config order) or `Normal`. The attribute `active` lists all active warnings, e.g. `[WaterLow, Frost]`. The monitors themselves are not separate entities.
+- Outputs, sensors and the water level input: each its own entity.
 
 ### Water level sensor
 The sensor only gets power while measuring, to limit electrolysis on the electrodes:
@@ -140,14 +144,14 @@ Between measurements the last reading is kept. The first measurement runs at sta
 - Per output: pin, on/off level, `initial_state`, optional `conflict` and `requires`, HA fields (`unique_id`, topics). Outputs with a `command_topic` are spa outputs; outputs without one (buzzer, water level power) are internal.
 - Per sensor (temperature and water level): measuring interval (start: 10 s).
 - Water level sensor: `power` (output `spa_water_level_power`, GPIO 22), settle time (start: 0.1 s).
-- Per monitor: limit and, for value checks, hysteresis (start: 0.5 °C); optional `force_on` (output kept on while active) and `unknown_active` (an unknown value counts as true).
-- Section `spa`: Session switch and `spa_operation` sensor (HA fields), circulation output, session list, maintenance list (lists of steps; outputs in one step switch on together), stagger delay, maintenance times (list of clock times, e.g. `["06:00", "18:00"]`), flush time, circulation duration, status log interval.
+- Per monitor (order = Spa Status priority): `warning` (Spa Status value), limit and, for value checks, hysteresis (start: 0.5 °C); optional `force_on` (output kept on while active) and `unknown_active` (an unknown value counts as true).
+- Section `spa`: Session switch, `spa_operation` and Spa Status sensors (HA fields), circulation output, session list, maintenance list (lists of steps; outputs in one step switch on together), stagger delay, maintenance times (list of clock times, e.g. `["06:00", "18:00"]`), flush time, circulation duration, status log interval.
 
 ### Code structure
 | Module | Contents |
 |---|---|
 | `managespacontroller.py` | `main()`: read config, build objects, main loop (service entry point). MQTT connects asynchronously and keeps retrying, so a broker that is down does not stop the controller. |
-| `entities.py` | Publisher (MQTT states and discovery), base class Entity (name, `unique_id`, topics, discovery payload), Output, Input, WaterLevelSensor (Input with power output), TemperatureSensor, TimestampSensor, Monitor, SessionSwitch, OperationSensor |
+| `entities.py` | Publisher (MQTT states, attributes and discovery), base class Entity (name, `unique_id`, topics, discovery payload), Output, Input, WaterLevelSensor (Input with power output), TemperatureSensor, TimestampSensor, Monitor, SessionSwitch, OperationSensor, StatusSensor |
 | `spa.py` | The state machine (state, transitions, lists, timers, rules), the fault interlock and frost protection; owns all entities; all commands go through it |
 | `display.py` | LCD and buzzer; gets its information from the Spa. The LCD is optional: if it is missing at startup or fails later, the controller keeps running, logs it once and retries every 60 s. The buzzer does not depend on the LCD. |
 

@@ -24,6 +24,9 @@ class Publisher:
         if entity.state_topic is None or entity.state is None:
             return
         self._client.publish(entity.state_topic, entity.state)
+        attributes = entity.attributes()
+        if attributes is not None:
+            self._client.publish(entity.state_topic + "/attributes", json.dumps(attributes))
         if self.timestamp is not None:
             self._client.publish(self.timestamp.state_topic, self.timestamp.state)
 
@@ -58,6 +61,10 @@ class Entity:
     @property
     def state(self):
         """Payload to publish on the state topic, or None if unknown."""
+        return None
+
+    def attributes(self):
+        """Extra attributes published as JSON on <state_topic>/attributes, or None."""
         return None
 
     def discovery_payload(self):
@@ -321,4 +328,39 @@ class OperationSensor(Entity):
     def discovery_payload(self):
         payload = super().discovery_payload()
         payload.update({"device_class": "enum", "options": self.OPTIONS})
+        return payload
+
+
+class StatusSensor(Entity):
+    """Reports the active monitor warnings to HA as one enum sensor.
+    The value is the warning of the first active monitor in config order; all
+    active warnings are in the attribute 'active'."""
+
+    NORMAL = "Normal"
+
+    def __init__(self, unique_id, config, monitors):
+        super().__init__(unique_id, config)
+        self._monitors = [m for m in monitors if m.warning]
+        self.options = [m.warning for m in self._monitors] + [self.NORMAL]
+
+    def active(self):
+        return [m.warning for m in self._monitors if m.is_on]
+
+    @property
+    def state(self):
+        active = self.active()
+        return active[0] if active else self.NORMAL
+
+    def attributes(self):
+        return {"active": self.active()}
+
+    def discovery_payload(self):
+        payload = super().discovery_payload()
+        payload.update(
+            {
+                "device_class": "enum",
+                "options": self.options,
+                "json_attributes_topic": self.state_topic + "/attributes",
+            }
+        )
         return payload

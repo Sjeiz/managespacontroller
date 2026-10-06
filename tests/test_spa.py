@@ -33,7 +33,7 @@ sys.modules["smbus"] = types.ModuleType("smbus")
 
 import managespacontroller as mc  # noqa: E402
 from display import Display  # noqa: E402
-from entities import OperationSensor, SessionSwitch  # noqa: E402
+from entities import Monitor, OperationSensor, SessionSwitch, StatusSensor  # noqa: E402
 from spa import Spa  # noqa: E402
 
 
@@ -54,8 +54,11 @@ for e in entities.values():
         e.setup()
 pub = FakePublisher()
 sc = config["spa"]
+monitors = [e for e in entities.values() if isinstance(e, Monitor)]
 spa = Spa(sc, entities, SessionSwitch("spa_session", sc["session_switch"]),
-          OperationSensor("spa_operation", sc["operation_sensor"]), pub)
+          OperationSensor("spa_operation", sc["operation_sensor"]),
+          StatusSensor("spa_status", sc["status_sensor"], monitors), pub)
+status = spa.status_sensor
 O = spa.outputs
 failed = False
 
@@ -79,6 +82,9 @@ for uid in ("spa_temp_1", "spa_temp_2", "spa_temp_3"):
 entities["spa_water_level"].apply(False)
 spa.start()
 check("start: only heat pump on, Standby", on() == ["spa_heatpump"] and spa.state == "Standby" and spa.operation_sensor.value == "Standby")
+check("start: Spa Status Normal, nothing active", status.state == "Normal" and status.attributes() == {"active": []})
+check("Spa Status options follow config order", status.options == ["WaterLow", "TempHigh", "Frost", "Normal"])
+check("monitors are not separate HA entities", all(m.config_topic is None and m.state_topic is None for m in monitors))
 check("start: heat pump pin high (gpio_on=1)", GPIO.pins[26] == 1)
 check("start: pump1 pin at off-level (active low = 1)", GPIO.pins[21] == 1)
 check("start: buzzer and level power are not spa outputs", "spa_buzzer" not in O and "spa_water_level_power" not in O)
@@ -158,6 +164,7 @@ check("maintenance -> session: timers cancelled", spa.state == "Session" and "sp
 spa.handle_reading("spa_temp_1", 40.1)
 spa.tick(t + 4001, datetime(2026, 10, 7, 15, 1))
 check("fault 40.1: all off incl heat pump, Error, Standby", on() == [] and spa.fault and spa.operation_sensor.value == "Error" and spa.state == "Standby")
+check("fault 40.1: Spa Status TempHigh", status.state == "TempHigh")
 spa.handle_command("spa_session", "on", t + 4002)
 check("fault: session refused", spa.state == "Standby" and on() == [] and not spa.session_switch.is_on)
 spa.handle_command("spa_pump1", "on", t + 4003)
@@ -180,6 +187,7 @@ check("level measure: reads problem, power off afterwards", v is True and GPIO.p
 spa.handle_reading("spa_water_level", v)
 spa.tick(t + 4010, datetime(2026, 10, 7, 22, 3))
 check("water fault active with warning WaterLow", spa.fault and spa.warnings() == ["WaterLow"])
+check("water fault: Spa Status WaterLow", status.state == "WaterLow")
 
 
 class FakeLCD:
@@ -220,6 +228,7 @@ spa.handle_reading("spa_temp_3", 3.9)
 spa.tick(t + 1, W2)
 check("frost 3.9: monitor on, heat pump forced on", entities["spa_status_frost"].is_on and "spa_heatpump" in on())
 check("frost: reported Frost", spa.operation_sensor.value == "Frost")
+check("frost: Spa Status Frost", status.state == "Frost" and status.attributes() == {"active": ["Frost"]})
 spa.handle_command("spa_heatpump", "off", t + 2)
 check("frost: heat pump off refused", "spa_heatpump" in on())
 spa.handle_command("spa_circulation", "on", t + 3)
@@ -234,6 +243,7 @@ GPIO.inputs[12] = 0
 spa.handle_reading("spa_water_level", entities["spa_water_level"].measure())
 spa.tick(t + 8, W2)
 check("frost + fault: fault wins, everything off, Error", on() == [] and spa.operation_sensor.value == "Error")
+check("frost + low water: Spa Status WaterLow (first in config), both active", status.state == "WaterLow" and status.attributes() == {"active": ["WaterLow", "Frost"]})
 GPIO.inputs[12] = 1
 spa.handle_reading("spa_water_level", entities["spa_water_level"].measure())
 spa.tick(t + 9, W2)

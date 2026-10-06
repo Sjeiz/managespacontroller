@@ -60,6 +60,7 @@ The checks form **one continuous scenario**: each check starts from the state th
 | **Water level sensor** | The power output is switched on only while measuring and is off afterwards; low water gives a fault with warning `WaterLow`. |
 | **Buzzer and LCD** | The buzzer pulses 1 s on / 1 s off during a fault and is off afterwards; LCD line 0 shows the warning, line 1 the water temperature. |
 | **Frost protection** | Below 4 °C the heat pump is forced on and `Frost` is reported; switching it off and switching the heater on are refused; `Session` takes display priority over `Frost`; a fault takes precedence (everything off), and clearing it switches the heat pump back on; an unknown outside temperature counts as frost (`unknown_active`); above 4 °C the heat pump can be switched off again; an unknown water temperature does not cause a fault. |
+| **Spa Status** | `Normal` at startup with nothing active; options follow the config order of the monitors; monitors are not separate HA entities; `TempHigh`, `WaterLow` and `Frost` when active; with low water and frost together the first monitor in the config (`WaterLow`) wins and the attribute `active` lists both. |
 | **Display failures** | No LCD at startup and during a session does not raise; the buzzer keeps working without an LCD; the LCD reconnects when it becomes available; losing the LCD during operation does not raise and marks it unavailable. |
 | **Secrets file** | A missing `managespacontroller.secrets.json` stops the controller with a clear message; a present file is merged into the MQTT config. The test uses a temporary file and never touches a real secrets file. |
 
@@ -73,6 +74,7 @@ The tests read `managespacontroller.py.json` and assume its current values. A ch
 - maintenance times `06:00`, `14:00` and `22:00` (the fault check uses `22:00` to verify that a maintenance time during a fault does nothing);
 - temperature monitor limit 40 °C with hysteresis 0.5 °C;
 - frost monitor below 4 °C on `spa_temp_3` with `force_on: spa_heatpump` and `unknown_active`;
+- monitor order water, temperature, frost with warnings `WaterLow`, `TempHigh`, `Frost` (Spa Status priority);
 - water level input on pin 12 with `gpio_on: 0` (the current override), power output on pin 22;
 - heat pump on pin 26 (active high), pump 1 on pin 21 (active low).
 

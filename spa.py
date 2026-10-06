@@ -15,11 +15,12 @@ FROST = "Frost"  # reported only: a force_on monitor (frost protection) is activ
 
 
 class Spa:
-    def __init__(self, config, entities, session_switch, operation_sensor, publisher):
+    def __init__(self, config, entities, session_switch, operation_sensor, status_sensor, publisher):
         """entities: dict unique_id -> entity (outputs, inputs, sensors, monitors)."""
         self.entities = entities
         self.session_switch = session_switch
         self.operation_sensor = operation_sensor
+        self.status_sensor = status_sensor
         self._publisher = publisher
 
         # Only outputs with a command topic are spa outputs; internal outputs (buzzer,
@@ -85,6 +86,7 @@ class Spa:
         else:
             self._apply_initial_states()
         self._publish_state()
+        self._publisher.state(self.status_sensor)
 
     def handle_command(self, target, payload, now):
         log.info("Message received: target=%s, value=%s", target, payload)
@@ -118,11 +120,16 @@ class Spa:
         self._check_maintenance_timers(now)
 
     def _evaluate_monitors(self):
-        # Config order matters: a monitor may check monitors defined before it
+        # Config order matters: a monitor may check monitors defined before it,
+        # and the first active monitor determines the Spa Status value
+        changed = False
         for monitor in self.monitors:
             if monitor.evaluate(self.entities):
                 self._publisher.state(monitor)
-                self._publish_operation()
+                changed = True
+        if changed:
+            self._publish_operation()
+            self._publisher.state(self.status_sensor)
 
     def _problem_monitors(self):
         return [monitor for monitor in self.monitors if monitor.device_class == "problem"]

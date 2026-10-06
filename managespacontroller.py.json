@@ -248,40 +248,29 @@
 		"spa_status_water": {
 			"name": "Spa Status (Water)",
 			"device_class": "problem",
-			"config_topic": "homeassistant/binary_sensor/spa-controller/spa_status_water/config",
-			"state_topic": "spa-controller/spa_status/spa_status_water",
 			"monitor": {
 				"check_01": "state_on, spa_water_level"
 			},
-			"payload_on": "problem",
-			"payload_off": "ok",
 			"warning": "WaterLow"
 		},
 		"spa_status_temp": {
 			"name": "Spa Status (Temperature)",
 			"device_class": "problem",
-			"config_topic": "homeassistant/binary_sensor/spa-controller/spa_status_temp/config",
-			"state_topic": "spa-controller/spa_status/spa_status_temp",
 			"monitor": {
 				"check_01": "value_greater, spa_temp_1, 40"
 			},
-			"payload_on": "problem",
-			"payload_off": "ok",
 			"warning": "TempHigh",
 			"hysteresis": 0.5
 		},
 		"spa_status_frost": {
 			"name": "Spa Status (Frost)",
 			"device_class": "cold",
-			"config_topic": "homeassistant/binary_sensor/spa-controller/spa_status_frost/config",
-			"state_topic": "spa-controller/spa_status/spa_status_frost",
 			"monitor": {
 				"check_01": "value_less, spa_temp_3, 4"
 			},
-			"payload_on": "on",
-			"payload_off": "off",
 			"force_on": "spa_heatpump",
-			"unknown_active": true
+			"unknown_active": true,
+			"warning": "Frost"
 		}
 	},
 	"spa": {
@@ -298,6 +287,11 @@
 			"name": "Spa Operation",
 			"config_topic": "homeassistant/sensor/spa-controller/spa_operation/config",
 			"state_topic": "spa-controller/spa_operation"
+		},
+		"status_sensor": {
+			"name": "Spa Status",
+			"config_topic": "homeassistant/sensor/spa-controller/spa_status/config",
+			"state_topic": "spa-controller/spa_status"
 		},
 		"circulation": "spa_circulation",
 		"session_list": [
