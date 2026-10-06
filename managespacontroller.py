@@ -33,6 +33,7 @@ from entities import (
     WaterLevelSensor,
 )
 from spa import Spa
+from webserver import WebServer
 
 log = logging.getLogger("managespacontroller")
 
@@ -185,6 +186,12 @@ def main():
         if isinstance(entity, MeasuringEntity):
             entity.start(events)
 
+    web = None
+    if "web" in config:
+        web = WebServer(int(config["web"].get("port", 80)), events)
+        if not web.start():
+            web = None
+
     pending = []
     wait_for_first_readings(events, entities, pending)
     spa.start()
@@ -207,12 +214,16 @@ def main():
                     spa.handle_reading(event[1], event[2])
                 elif event[0] == "command":
                     spa.handle_command(event[1], event[2], time.monotonic())
+                elif event[0] == "web_command":
+                    event[3].put(spa.handle_command(event[1], event[2], time.monotonic()))
                 elif event[0] == "connected":
                     log.info("MQTT connected")
                     publish_all(publisher, entities, extra, mqtt_config)
 
             spa.tick(time.monotonic(), datetime.now())
             display.update(spa, time.time())
+            if web is not None:
+                web.update(spa.snapshot())
 
             if time.monotonic() - status_logged_at >= status_log_secs:
                 status_logged_at = time.monotonic()

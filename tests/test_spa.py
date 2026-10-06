@@ -324,6 +324,75 @@ except Exception:
 check("display lost during operation: no exception, marked unavailable", ok and dd._lcd is None)
 spa.handle_command("spa_session", "off", t + 25)
 
+# ---- web server ----
+import queue  # noqa: E402
+import threading  # noqa: E402
+import urllib.error  # noqa: E402
+import urllib.request  # noqa: E402
+
+from webserver import WebServer  # noqa: E402
+
+web_events = queue.Queue()
+web = WebServer(0, web_events)  # port 0: any free port
+check("web server starts", web.start())
+base = f"http://127.0.0.1:{web._server.server_address[1]}"
+stop_loop = threading.Event()
+
+
+def fake_main_loop():
+    # What the main loop does with web commands
+    while not stop_loop.is_set():
+        try:
+            event = web_events.get(timeout=0.1)
+        except queue.Empty:
+            continue
+        if event[0] == "web_command":
+            event[3].put(spa.handle_command(event[1], event[2], t + 100))
+        web.update(spa.snapshot())
+
+
+loop_thread = threading.Thread(target=fake_main_loop, daemon=True)
+loop_thread.start()
+web.update(spa.snapshot())
+
+
+def http(path, body=None):
+    data = None if body is None else json.dumps(body).encode()
+    request = urllib.request.Request(base + path, data=data, method="POST" if data else "GET",
+                                     headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return response.status, response.read()
+    except urllib.error.HTTPError as error:
+        return error.code, error.read()
+
+
+code, page = http("/")
+check("web: page served", code == 200 and b"Spa Controller" in page)
+code, raw = http("/api/status")
+snap = json.loads(raw)
+check("web: status has operation, status and values", code == 200 and snap["operation"] == spa.operation()
+      and snap["status"] == status.state and any(v["name"] == "Water Temp" for v in snap["values"]))
+check("web: controls start with the Session switch and contain no internal or disabled outputs",
+      snap["controls"][0]["id"] == "spa_session"
+      and not {"spa_buzzer", "spa_water_level_power", "spa_pump4"} & {c["id"] for c in snap["controls"]})
+code, raw = http("/api/command", {"target": "spa_circulation", "value": "on"})
+check("web: command switches an output", code == 200 and json.loads(raw) == {"ok": True, "refused": None}
+      and "spa_circulation" in on())
+http("/api/command", {"target": "spa_circulation", "value": "off"})
+code, raw = http("/api/command", {"target": "spa_heater", "value": "on"})
+check("web: refused command returns the reason", json.loads(raw)["refused"] == "requires spa_circulation")
+code, raw = http("/api/command", {"target": "spa_session", "value": "on"})
+check("web: Session switch starts a session", json.loads(raw)["refused"] is None and spa.state == "Session")
+http("/api/command", {"target": "spa_session", "value": "off"})
+code, raw = http("/api/command", {"nonsense": 1})
+check("web: invalid command gives 400", code == 400)
+code, raw = http("/unknown")
+check("web: unknown path gives 404", code == 404)
+stop_loop.set()
+loop_thread.join(timeout=2)
+web.stop()
+
 # ---- secrets file ----
 real_secrets_file = mc.SECRETS_FILE
 with tempfile.TemporaryDirectory() as tmp:

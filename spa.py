@@ -49,6 +49,8 @@ class Spa:
         self._flush_until = None
         self._circulation_until = None
         self._last_maintenance_slot = None
+        self._command_target = None  # target of the command being handled, for refusal reporting
+        self._refusal = None
 
     def _validate(self):
         # Outputs moved to the config's "disabled" section are skipped in the lists
@@ -90,7 +92,10 @@ class Spa:
         self._publisher.state(self.status_sensor)
 
     def handle_command(self, target, payload, now):
+        """Handle a command from HA or the web page. Returns the refusal reason, or None."""
         log.info("Message received: target=%s, value=%s", target, payload)
+        self._command_target = target
+        self._refusal = None
         if target == self.session_switch.unique_id:
             if payload == self.session_switch.payload_on:
                 self._enter_session(now)
@@ -101,6 +106,9 @@ class Spa:
             self.switch(target, payload == self.outputs[target].payload_on)
         else:
             log.warning("Command for unknown target %s ignored", target)
+            self._refusal = f"unknown target {target}"
+        self._command_target = None
+        return self._refusal
 
     def handle_reading(self, uid, value):
         entity = self.entities.get(uid)
@@ -214,6 +222,8 @@ class Spa:
 
     def _refuse(self, output, reason, requested=True):
         log.info("Refused: %s %s (%s)", output.unique_id, "on" if requested else "off", reason)
+        if output.unique_id == self._command_target and self._refusal is None:
+            self._refusal = reason
         # Republish the actual state so the HA switch falls back
         self._publisher.state(output)
         return False
@@ -232,6 +242,7 @@ class Spa:
     def _enter_session(self, now):
         if self.fault:
             log.info("Refused: session (fault active)")
+            self._refusal = "fault active"
             return
         if self.state == SESSION:
             return
@@ -316,6 +327,22 @@ class Spa:
             f"{e.name}: {e.state or '-'}" for e in self.entities.values() if isinstance(e, Input)
         )
         return f"Status: {status} | on: {on} | {temperatures} | {inputs}"
+
+    def snapshot(self):
+        """Current state for the web page (built in the main loop, read by the web thread)."""
+        return {
+            "operation": self.operation(),
+            "status": self.status_sensor.state,
+            "active": self.status_sensor.active(),
+            "controls": [{"id": self.session_switch.unique_id, "name": self.session_switch.name, "on": self.session_switch.is_on}]
+            + [{"id": o.unique_id, "name": o.name, "on": o.is_on} for o in self.outputs.values()],
+            "values": [
+                {"name": e.name, "value": e.value, "unit": e.unit_of_measurement or ""}
+                for e in self.entities.values()
+                if isinstance(e, TemperatureSensor)
+            ]
+            + [{"name": e.name, "value": e.state, "unit": ""} for e in self.entities.values() if isinstance(e, Input)],
+        }
 
     def operation(self):
         """Value reported as spa_operation."""

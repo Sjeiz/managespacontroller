@@ -336,6 +336,9 @@
 		"circulation_secs": 3600,
 		"status_log_secs": 300
 	},
+	"web": {
+		"port": 80
+	},
 	"disabled": {
 		"spa_pump4": {
 			"name": "Spa Pump #4",

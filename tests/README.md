@@ -62,6 +62,7 @@ The checks form **one continuous scenario**: each check starts from the state th
 | **Frost protection** | Below 4 °C the heat pump is forced on and `Frost` is reported; switching it off and switching the heater on are refused; `Active` (Session) takes display priority over `Frost`; a fault takes precedence (everything off), and clearing it switches the heat pump back on; an unknown outside temperature counts as frost (`unknown_active`); above 4 °C the heat pump can be switched off again; an unknown water temperature does not cause a fault. |
 | **Spa Status** | `Normal` at startup with nothing active; options follow the config order of the monitors; monitors are not separate HA entities; `TempHigh`, `WaterLow` and `Frost` when active; with low water and frost together the first monitor in the config (`WaterLow`) wins and the attribute `active` lists both. |
 | **Display failures** | No LCD at startup and during a session does not raise; the buzzer keeps working without an LCD; the LCD reconnects when it becomes available; losing the LCD during operation does not raise and marks it unavailable. |
+| **Web server** | A real server on a free port with a stand-in for the main loop: page and status served; controls start with the Session switch and contain no internal or disabled outputs; a command switches an output; a refused command returns its reason; the Session switch starts a session; invalid commands give 400, unknown paths 404. |
 | **Secrets file** | A missing `managespacontroller.secrets.json` stops the controller with a clear message; a present file is merged into the MQTT config. The test uses a temporary file and never touches a real secrets file. |
 
 ## Dependence on the config
@@ -86,6 +87,7 @@ These parts need the real hardware or broker and are checked on the Pi after a d
 - the sensor threads and their timing, and reading the real DS18B20 files;
 - real GPIO pins and relays;
 - the real LCD over I2C;
+- the JavaScript of the web page in a real browser (only the server side and the JSON are tested);
 - `main()` itself (startup order, the main loop, shutdown).
 
 ## Adding a test

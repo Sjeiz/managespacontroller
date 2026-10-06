@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spa Controller</title>
+<style>
+  :root {
+    --bg: #1c1f26; --card: #2a2f3a; --text: #e8eaf0; --muted: #9aa1b2;
+    --on: #3fbf6f; --off: #555c6b; --error: #e5534b; --frost: #39c5cf;
+    --manual: #e8c33a; --maintenance: #4a8fe7; --standby: #9aa1b2;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text);
+         font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  h1 { font-size: 1.3rem; margin: 0 0 12px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .card { background: var(--card); border-radius: 16px; padding: 16px; }
+  .card h2 { font-size: 1.1rem; margin: 0 0 8px; }
+  .row { display: flex; align-items: center; justify-content: space-between;
+         padding: 10px 0; border-bottom: 1px solid #353b48; gap: 12px; }
+  .row:last-child { border-bottom: none; }
+  .value { color: var(--muted); text-align: right; }
+  .badge { font-weight: 600; }
+  .switch { position: relative; width: 52px; height: 30px; flex: none; border: none; border-radius: 15px;
+            background: var(--off); cursor: pointer; transition: background .15s; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px;
+                   border-radius: 50%; background: #fff; transition: left .15s; }
+  .switch.on { background: var(--on); }
+  .switch.on::after { left: 25px; }
+  .switch:disabled { opacity: .5; cursor: wait; }
+  #message { min-height: 1.4em; margin: 0 0 12px; color: var(--error); }
+  #stale { color: var(--muted); font-size: .85rem; margin-top: 12px; }
+</style>
+</head>
+<body>
+<h1>Spa Controller</h1>
+<div id="message"></div>
+<div class="grid">
+  <div class="card"><h2>Control</h2><div id="controls"></div></div>
+  <div class="card"><h2>Monitor</h2><div id="monitor"></div></div>
+</div>
+<div id="stale"></div>
+<script>
+const colors = {Error: "var(--error)", Active: "var(--on)", Maintenance: "var(--maintenance)",
+                Frost: "var(--frost)", Manual: "var(--manual)", Standby: "var(--standby)",
+                Normal: "var(--standby)"};
+let busy = false;
+
+function row(label, valueHtml) {
+  return `<div class="row"><span>${label}</span>${valueHtml}</div>`;
+}
+
+function render(s) {
+  document.getElementById("controls").innerHTML = s.controls.map(c =>
+    row(c.name, `<button class="switch ${c.on ? "on" : ""}" data-id="${c.id}" data-on="${c.on}"
+                  aria-label="${c.name}" ${busy ? "disabled" : ""}></button>`)).join("");
+  const statusText = s.active.length > 1 ? `${s.status} (${s.active.join(", ")})` : s.status;
+  document.getElementById("monitor").innerHTML =
+    row("Spa Operation", `<span class="badge" style="color:${colors[s.operation] || "inherit"}">${s.operation}</span>`) +
+    row("Spa Status", `<span class="badge" style="color:${s.status === "Normal" ? colors.Normal : colors.Error}">${statusText}</span>`) +
+    s.values.map(v => row(v.name, `<span class="value">${v.value === null ? "-" : v.value} ${v.unit}</span>`)).join("");
+  document.querySelectorAll(".switch").forEach(b => b.onclick = () => toggle(b.dataset.id, b.dataset.on !== "true"));
+}
+
+async function refresh() {
+  try {
+    const response = await fetch("/api/status", {cache: "no-store"});
+    const s = await response.json();
+    if (s.controls) render(s);
+    document.getElementById("stale").textContent = "Updated " + new Date().toLocaleTimeString();
+  } catch (e) {
+    document.getElementById("stale").textContent = "Controller not reachable";
+  }
+}
+
+async function toggle(id, on) {
+  busy = true;
+  document.querySelectorAll(".switch").forEach(b => b.disabled = true);
+  try {
+    const response = await fetch("/api/command", {method: "POST", headers: {"Content-Type": "application/json"},
+                                                  body: JSON.stringify({target: id, value: on ? "on" : "off"})});
+    const result = await response.json();
+    document.getElementById("message").textContent = result.refused ? `Refused: ${result.refused}` : "";
+  } catch (e) {
+    document.getElementById("message").textContent = "Controller not reachable";
+  }
+  busy = false;
+  refresh();
+}
+
+refresh();
+setInterval(() => { if (!busy) refresh(); }, 2000);
+</script>
+</body>
+</html>

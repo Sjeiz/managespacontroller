@@ -125,6 +125,13 @@ A monitor with `force_on` keeps that output on while it is active; switching it 
 - **Spa Status:** sensor with the `warning` of the first active monitor in config order, or `Normal`. The attribute `active` lists all active warnings. The monitors themselves are not separate entities.
 - Outputs, sensors and the water level input: each its own entity.
 
+### Web page
+Control without Home Assistant: open `http://spa-controller.iot.cheizoo.lan` (port from `web.port`) in a browser on the local network. No password.
+- Shows the same as the HA dashboard: Spa Operation, Spa Status, temperatures, water level, and a switch for the Session switch and every spa output. The layout stacks on a phone.
+- Refreshes every 2 s. A command goes into the same queue as MQTT commands, so all rules apply; a refused command shows its reason (e.g. `Refused: fault active`) and the switch falls back.
+- Works when HA or the MQTT broker is down. If the port cannot be opened, the controller logs it and keeps running without the page.
+- Without a `web` section in the config the page is off.
+
 ### Water level sensor
 The sensor only gets power while measuring, to limit electrolysis on the electrodes:
 1. power output on;
@@ -136,7 +143,7 @@ Between measurements the last reading is kept. The first measurement runs at sta
 
 ### Threads
 - Each sensor runs in its own thread and measures once per measuring interval (the DS18B20 temperature sensors take up to 0.75 s per reading; the water level sensor does its power/settle/read cycle).
-- MQTT receives commands in its own thread (paho).
+- MQTT receives commands in its own thread (paho); the web server serves requests in its own thread and puts commands in the same queue, getting the refusal reason back.
 - All of them put their results in one queue. Only the main loop reads the queue, touches the Spa and switches outputs; the one exception is the water level sensor, which switches its own power output from its thread (no other code uses that pin).
 
 ### Config
@@ -145,6 +152,7 @@ Between measurements the last reading is kept. The first measurement runs at sta
 - Per sensor (temperature and water level): measuring interval.
 - Water level sensor: `power` (the output that powers it) and settle time.
 - Per monitor (order = Spa Status priority): `warning` (Spa Status value), limit and, for value checks, hysteresis; optional `force_on` (output kept on while active) and `unknown_active` (an unknown value counts as true).
+- Section `web`: port of the web page.
 - Section `spa`: Session switch, `spa_operation` and Spa Status sensors (HA fields), circulation output, session list, maintenance list (lists of steps; outputs in one step switch on together), stagger delay, maintenance times (list of clock times, e.g. `["06:00", "18:00"]`), flush time, circulation duration, status log interval.
 
 ### Code structure
@@ -153,6 +161,7 @@ Between measurements the last reading is kept. The first measurement runs at sta
 | `managespacontroller.py` | `main()`: read config, build objects, main loop (service entry point). MQTT connects asynchronously and keeps retrying, so a broker that is down does not stop the controller. |
 | `entities.py` | Publisher (MQTT states, attributes and discovery), base class Entity (name, `unique_id`, topics, discovery payload), Output, Input, WaterLevelSensor (Input with power output), TemperatureSensor, TimestampSensor, Monitor, SessionSwitch, OperationSensor, StatusSensor |
 | `spa.py` | The state machine (state, transitions, lists, timers, rules), the fault interlock and frost protection; owns all entities; all commands go through it |
+| `webserver.py`, `webserver.html` | Web page: HTTP server in its own thread (status snapshot from the main loop, commands via the queue) and the page itself |
 | `display.py` | LCD and buzzer; gets its information from the Spa. The LCD is optional: if it is missing at startup or fails later, the controller keeps running, logs it once and retries every 60 s. The buzzer does not depend on the LCD. |
 
 - An Output switches the pin and remembers its state in one place; outputs are never read back. Only inputs and sensors are read.
