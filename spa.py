@@ -10,6 +10,7 @@ STANDBY = "Standby"
 SESSION = "Session"
 MAINTENANCE = "Maintenance"
 ERROR = "Error"
+MANUAL = "Manual"  # reported only: Standby with an output deviating from its initial state
 
 
 class Spa:
@@ -170,6 +171,7 @@ class Spa:
         output.write(on)
         log.info("Output %s -> %s", output.unique_id, output.state)
         self._publisher.state(output)
+        self._publish_operation()
 
     def _refuse(self, output, reason):
         log.info("Refused: %s on (%s)", output.unique_id, reason)
@@ -262,7 +264,7 @@ class Spa:
 
     def status_line(self):
         """One-line summary for the periodic status log."""
-        status = ERROR if self.fault else self.state
+        status = self.operation()
         if self.fault:
             status += f" ({', '.join(self.warnings()) or 'problem'})"
         on = " ".join(o.short_name or o.unique_id for o in self.outputs.values() if o.is_on) or "-"
@@ -276,8 +278,22 @@ class Spa:
         )
         return f"Status: {status} | on: {on} | {temperatures} | {inputs}"
 
+    def operation(self):
+        """Value reported as spa_operation."""
+        if self.fault:
+            return ERROR
+        if self.state == STANDBY and any(o.is_on != o.initial_on for o in self.outputs.values()):
+            return MANUAL
+        return self.state
+
+    def _publish_operation(self):
+        value = self.operation()
+        if value != self.operation_sensor.value:
+            self.operation_sensor.value = value
+            self._publisher.state(self.operation_sensor)
+
     def _publish_state(self):
         self.session_switch.is_on = self.state in (SESSION, MAINTENANCE)
-        self.operation_sensor.value = ERROR if self.fault else self.state
         self._publisher.state(self.session_switch)
+        self.operation_sensor.value = self.operation()
         self._publisher.state(self.operation_sensor)

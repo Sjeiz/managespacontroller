@@ -58,7 +58,7 @@ The Pi runs a git clone of this repo; deploy by pushing to GitHub and pulling on
 ### States
 | State | Meaning |
 |---|---|
-| **Standby** | Nobody active. Nothing from the lists is running. |
+| **Standby** | No session or maintenance active. Outputs can be on through manual control. |
 | **Session** | Started by the user with the Session switch. |
 | **Maintenance** | Started by the clock. Behaves like a session, with timers that end it. |
 
@@ -114,7 +114,7 @@ Each monitor that compares a value has its own hysteresis, so sensor jitter arou
 
 ### Reporting to HA
 - **Session switch:** on during Session and Maintenance.
-- **`spa_operation`:** sensor with the values `Standby`, `Session`, `Maintenance`, `Error`.
+- **`spa_operation`:** sensor with the values `Standby`, `Manual` (Standby with an output deviating from its `initial_state`; reporting only, not a state), `Session`, `Maintenance`, `Error`.
 - Outputs, sensors, water level and monitors: each its own entity.
 
 ### Water level sensor
