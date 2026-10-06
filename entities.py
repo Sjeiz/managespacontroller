@@ -257,12 +257,16 @@ class TimestampSensor(Entity):
 
 
 class Monitor(BinaryEntity):
-    """A problem check on other entities, with optional hysteresis for value checks."""
+    """A check on other entities, with optional hysteresis for value checks.
+    device_class "problem" makes it a fault; force_on keeps an output on while active."""
 
     def __init__(self, unique_id, config):
         super().__init__(unique_id, config)
         self.warning = config.get("warning")
         self.hysteresis = float(config.get("hysteresis", 0))
+        self.force_on = config.get("force_on")
+        # Value checks count as true when the value is unknown (fail-safe, e.g. frost)
+        self.unknown_active = bool(config.get("unknown_active", False))
         self.checks = []
         for key in sorted(config.get("monitor", {})):
             parts = [part.strip() for part in config["monitor"][key].split(",")]
@@ -286,7 +290,7 @@ class Monitor(BinaryEntity):
             return False
         value = entity.value
         if not isinstance(value, (int, float)) or isinstance(value, bool):
-            return False
+            return self.unknown_active
         # Hysteresis: once active, a value check only clears beyond limit -/+ hysteresis
         margin = self.hysteresis if self.is_on else 0
         if kind == "value_greater":
@@ -304,7 +308,7 @@ class SessionSwitch(BinaryEntity):
 class OperationSensor(Entity):
     """Reports the Spa state to HA as an enum sensor."""
 
-    OPTIONS = ["Standby", "Manual", "Session", "Maintenance", "Error"]
+    OPTIONS = ["Standby", "Manual", "Frost", "Session", "Maintenance", "Error"]
 
     def __init__(self, unique_id, config):
         super().__init__(unique_id, config)

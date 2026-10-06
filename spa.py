@@ -11,6 +11,7 @@ SESSION = "Session"
 MAINTENANCE = "Maintenance"
 ERROR = "Error"
 MANUAL = "Manual"  # reported only: Standby with an output deviating from its initial state
+FROST = "Frost"  # reported only: a force_on monitor (frost protection) is active
 
 
 class Spa:
@@ -50,6 +51,7 @@ class Spa:
     def _validate(self):
         names = {uid for step in self.session_list + self.maintenance_list for uid in step}
         names.add(self.circulation)
+        names.update(monitor.force_on for monitor in self.monitors if monitor.force_on)
         unknown = sorted(name for name in names if name not in self.outputs)
         if unknown:
             raise ValueError(f"Spa config refers to unknown outputs: {unknown}")
@@ -100,6 +102,7 @@ class Spa:
         """now: monotonic seconds; wallclock: local datetime."""
         self._evaluate_monitors()
         self._update_fault()
+        self._apply_force_on()
         self._check_maintenance_time(now, wallclock)
         self._advance_sequence(now)
         self._check_maintenance_timers(now)
@@ -109,6 +112,7 @@ class Spa:
         for monitor in self.monitors:
             if monitor.evaluate(self.entities):
                 self._publisher.state(monitor)
+                self._publish_operation()
 
     def _problem_monitors(self):
         return [monitor for monitor in self.monitors if monitor.device_class == "problem"]
@@ -137,6 +141,19 @@ class Spa:
     def warnings(self):
         return [m.warning for m in self._problem_monitors() if m.is_on and m.warning]
 
+    # ---- force_on (frost protection); the fault interlock takes precedence ---
+
+    def _forced_on(self, uid):
+        return any(m.is_on and m.force_on == uid for m in self.monitors)
+
+    def _apply_force_on(self):
+        if self.fault:
+            return
+        for monitor in self.monitors:
+            if monitor.is_on and monitor.force_on and not self.outputs[monitor.force_on].is_on:
+                log.info("Force on: %s (%s)", monitor.force_on, monitor.unique_id)
+                self.switch(monitor.force_on, True)
+
     # ---- switching: the single place where spa outputs are switched ----------
 
     def switch(self, uid, on, restore_conflict=True):
@@ -150,6 +167,8 @@ class Spa:
                 return self._refuse(output, "fault active")
             if output.requires and not self.outputs[output.requires].is_on:
                 return self._refuse(output, f"requires {output.requires}")
+            if output.conflict and self._forced_on(output.conflict):
+                return self._refuse(output, f"{output.conflict} is forced on")
             if output.conflict and self.outputs[output.conflict].is_on:
                 self.switch(output.conflict, False, restore_conflict=False)
             self._write(output, True)
@@ -157,6 +176,8 @@ class Spa:
 
         if not output.is_on:
             return True
+        if not self.fault and self._forced_on(uid):
+            return self._refuse(output, "forced on", requested=False)
         self._write(output, False)
         for dependent in self.outputs.values():
             if dependent.requires == uid and dependent.is_on:
@@ -173,8 +194,8 @@ class Spa:
         self._publisher.state(output)
         self._publish_operation()
 
-    def _refuse(self, output, reason):
-        log.info("Refused: %s on (%s)", output.unique_id, reason)
+    def _refuse(self, output, reason, requested=True):
+        log.info("Refused: %s %s (%s)", output.unique_id, "on" if requested else "off", reason)
         # Republish the actual state so the HA switch falls back
         self._publisher.state(output)
         return False
@@ -280,11 +301,16 @@ class Spa:
 
     def operation(self):
         """Value reported as spa_operation."""
+        # Display priority: Error, Session, Maintenance, Frost, Manual, Standby
         if self.fault:
             return ERROR
-        if self.state == STANDBY and any(o.is_on != o.initial_on for o in self.outputs.values()):
+        if self.state != STANDBY:
+            return self.state
+        if any(m.is_on and m.force_on for m in self.monitors):
+            return FROST
+        if any(o.is_on != o.initial_on for o in self.outputs.values()):
             return MANUAL
-        return self.state
+        return STANDBY
 
     def _publish_operation(self):
         value = self.operation()

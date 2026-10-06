@@ -110,11 +110,15 @@ Monitors:
 - water level: problem when the water is too low;
 - water temperature: problem above 40 °C, cleared below 39.5 °C.
 
+### Frost protection
+A monitor with `force_on` keeps that output on while it is active; switching it off (or switching on its `conflict` partner) is refused. The fault interlock takes precedence.
+- frost: outside temperature (`spa_temp_3`) below 4 °C, or unknown (`unknown_active`) → heat pump forced on.
+
 Each monitor that compares a value has its own hysteresis, so sensor jitter around the limit does not toggle the fault.
 
 ### Reporting to HA
 - **Session switch:** on during Session and Maintenance.
-- **`spa_operation`:** sensor with the values `Standby`, `Manual` (Standby with an output deviating from its `initial_state`; reporting only, not a state), `Session`, `Maintenance`, `Error`.
+- **`spa_operation`:** sensor showing the highest applicable value: `Error` → `Session` → `Maintenance` → `Frost` (frost protection active) → `Manual` (an output deviating from its `initial_state`) → `Standby`. `Frost` and `Manual` are reporting only, not states.
 - Outputs, sensors, water level and monitors: each its own entity.
 
 ### Water level sensor
@@ -135,7 +139,7 @@ Between measurements the last reading is kept. The first measurement runs at sta
 - Per output: pin, on/off level, `initial_state`, optional `conflict` and `requires`, HA fields (`unique_id`, topics). Outputs with a `command_topic` are spa outputs; outputs without one (buzzer, water level power) are internal.
 - Per sensor (temperature and water level): measuring interval (start: 10 s).
 - Water level sensor: `power` (output `spa_water_level_power`, GPIO 22), settle time (start: 0.1 s).
-- Per monitor: limit and, for value checks, hysteresis (start: 0.5 °C).
+- Per monitor: limit and, for value checks, hysteresis (start: 0.5 °C); optional `force_on` (output kept on while active) and `unknown_active` (an unknown value counts as true).
 - Section `spa`: Session switch and `spa_operation` sensor (HA fields), circulation output, session list, maintenance list (lists of steps; outputs in one step switch on together), stagger delay, maintenance times (list of clock times, e.g. `["06:00", "18:00"]`), flush time, circulation duration, status log interval.
 
 ### Code structure
