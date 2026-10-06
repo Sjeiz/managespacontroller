@@ -9,7 +9,7 @@ The repo lives in `/home/SjeizAdmin/python/managespacontroller/managespacontroll
 
 ## Logs
 The script runs as the systemd service `managespacontroller` and logs to the journal.
-Logged: commands from HA (`Message received`), state changes (`State:`), switched outputs (`Output`), refused switch-ons (`Refused`) and faults (`Fault:`). A status line (`Status:`) is logged at startup and every `status_log_secs` (default 300 s): state, outputs on, temperatures and inputs.
+Logged: commands from HA (`Message received`), state changes (`State:`), switched outputs (`Output`), refused switch-ons/offs (`Refused`), forced switch-ons by frost protection (`Force on`) and faults (`Fault:`). A status line (`Status:`) is logged at startup and every `status_log_secs` (default 300 s): state, outputs on, temperatures and inputs.
 
 ```bash
 # Follow live
@@ -110,11 +110,11 @@ Monitors:
 - water level: problem when the water is too low;
 - water temperature: problem above 40 °C, cleared below 39.5 °C.
 
+Each monitor that compares a value has its own hysteresis, so sensor jitter around the limit does not toggle the fault.
+
 ### Frost protection
 A monitor with `force_on` keeps that output on while it is active; switching it off (or switching on its `conflict` partner) is refused. The fault interlock takes precedence.
 - frost: outside temperature (`spa_temp_3`) below 4 °C, or unknown (`unknown_active`) → heat pump forced on.
-
-Each monitor that compares a value has its own hysteresis, so sensor jitter around the limit does not toggle the fault.
 
 ### Reporting to HA
 - **Session switch:** on during Session and Maintenance.
@@ -147,11 +147,11 @@ Between measurements the last reading is kept. The first measurement runs at sta
 |---|---|
 | `managespacontroller.py` | `main()`: read config, build objects, main loop (service entry point). MQTT connects asynchronously and keeps retrying, so a broker that is down does not stop the controller. |
 | `entities.py` | Publisher (MQTT states and discovery), base class Entity (name, `unique_id`, topics, discovery payload), Output, Input, WaterLevelSensor (Input with power output), TemperatureSensor, TimestampSensor, Monitor, SessionSwitch, OperationSensor |
-| `spa.py` | The state machine (state, transitions, lists, timers, rules) and the fault interlock; owns all entities; all commands go through it |
+| `spa.py` | The state machine (state, transitions, lists, timers, rules), the fault interlock and frost protection; owns all entities; all commands go through it |
 | `display.py` | LCD and buzzer; gets its information from the Spa |
 
 - An Output switches the pin and remembers its state in one place; outputs are never read back. Only inputs and sensors are read.
-- The fault interlock is checked at that single place where outputs are switched on.
+- The fault interlock and frost protection are checked at that single place where outputs are switched.
 - Each sensor class runs its own measuring thread and posts results to the queue.
 - Every class declares its attributes explicitly with defaults; config values are mapped onto them (no `setattr` from config, no `hasattr` checks).
 - No global variables.
@@ -163,3 +163,4 @@ Between measurements the last reading is kept. The first measurement runs at sta
    ```bash
    journalctl -u managespacontroller.service --since "14 days ago" --no-pager | grep -E "Started|Stopped|exited|Traceback|Error|refused|failed" | tail -60
    ```
+4. **Rebuild and SD card backup.** Not decided. Idea: an install script in this repo (enable 1-wire and I2C, install packages, install and enable the service), so a rebuild is: flash Raspberry Pi OS, clone, run the script, create the secrets file. For an image backup: `image-backup` (RonR's image-utils) to a network share, or a one-off `dd` over SSH. Open question: is there a network share the Pi can write to?
