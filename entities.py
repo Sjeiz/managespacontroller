@@ -36,10 +36,6 @@ class Publisher:
             entity.config_topic, json.dumps(payload), qos=self._qos, retain=True
         )
 
-    def remove_discovery(self, config_topic):
-        # An empty retained payload removes the entity from HA
-        self._client.publish(config_topic, "", qos=self._qos, retain=True)
-
     def status(self, topic, payload):
         self._client.publish(topic, payload, qos=self._qos)
 

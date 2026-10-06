@@ -103,7 +103,7 @@ Each monitor that compares a value has its own hysteresis, so sensor jitter arou
 
 ### Reporting to HA
 - **Session switch:** on during Session and Maintenance.
-- **`spa_operation`:** sensor with the values `Standby`, `Session`, `Maintenance`, `Error`. The controller removes the old binary sensor from HA itself (`obsolete_discovery_topics`); after deploying, point the card in the Jacuzzi dashboard to `sensor.spa_controller_spa_operation`.
+- **`spa_operation`:** sensor with the values `Standby`, `Session`, `Maintenance`, `Error`.
 - Outputs, sensors, water level and monitors: each its own entity.
 
 ### Water level sensor
@@ -126,7 +126,6 @@ Between measurements the last reading is kept. The first measurement runs at sta
 - Water level sensor: `power` (output `spa_water_level_power`, GPIO 22), settle time (start: 0.1 s).
 - Per monitor: limit and, for value checks, hysteresis (start: 0.5 °C).
 - Section `spa`: Session switch and `spa_operation` sensor (HA fields), circulation output, session list, maintenance list (lists of steps; outputs in one step switch on together), stagger delay, maintenance times (list of clock times, e.g. `["06:00", "18:00"]`), flush time, circulation duration.
-- `mqtt.obsolete_discovery_topics`: discovery topics that are cleared on connect, so HA removes those entities.
 
 ### Code structure
 | Module | Contents |

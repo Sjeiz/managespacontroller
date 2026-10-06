@@ -102,8 +102,6 @@ def create_mqtt_client(mqtt_config, events):
 
 def publish_all(publisher, entities, extra, mqtt_config):
     publisher.status(mqtt_config["statustopic"], mqtt_config["statusonline"])
-    for topic in mqtt_config.get("obsolete_discovery_topics", []):
-        publisher.remove_discovery(topic)
     for entity in list(entities.values()) + extra:
         publisher.discovery(entity)
         publisher.state(entity)

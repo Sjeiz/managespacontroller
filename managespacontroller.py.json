@@ -21,11 +21,7 @@
 		},
 		"sleep": 0.1,
 		"republish_sec": 60,
-		"debug": "true",
-		"obsolete_discovery_topics": [
-			"homeassistant/binary_sensor/spa-controller/spa_operation/config",
-			"homeassistant/binary_sensor/spa-controller/spa_water_flow/config"
-		]
+		"debug": "true"
 	},
 	"gpios": {
 		"spa_heatpump": {
@@ -290,18 +286,6 @@
 			"payload_off": "ok",
 			"warning": "TempHigh",
 			"hysteresis": 0.5
-		},
-		"spa_status": {
-			"name": "Spa Status",
-			"device_class": "problem",
-			"config_topic": "homeassistant/binary_sensor/spa-controller/spa_status/config",
-			"state_topic": "spa-controller/spa_status",
-			"monitor": {
-				"check_01": "state_on, spa_status_water",
-				"check_02": "state_on, spa_status_temp"
-			},
-			"payload_on": "problem",
-			"payload_off": "ok"
 		}
 	},
 	"spa": {
