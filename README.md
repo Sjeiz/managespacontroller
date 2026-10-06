@@ -75,10 +75,7 @@ The Pi runs a git clone of this repo; deploy by pushing to GitHub and pulling on
 A maintenance time during a session or a running maintenance does nothing. When the controller stops, every spa output goes to its `initial_state`.
 
 ### Lists
-| List | Contents, in order |
-|---|---|
-| **Session** | Lights and circulation, then pump 1, 2, 3 |
-| **Maintenance** | Circulation, then pump 1, 2, 3, blower |
+The config defines a session list and a maintenance list (`spa.session_list`, `spa.maintenance_list`): ordered steps, where the outputs in one step switch on together.
 
 On entering Session or Maintenance:
 - outputs in the list that are off are switched on; motors are staggered by the configured delay (16 A breaker inrush);
@@ -86,7 +83,7 @@ On entering Session or Maintenance:
 - outputs in neither list are not touched.
 
 ### Maintenance timers
-- Flush time expired (counted from when the maintenance list is fully on): pumps and blower off.
+- Flush time expired (counted from when the maintenance list is fully on): every output of the maintenance list except the circulation output goes off.
 - Circulation duration expired: back to Standby.
 
 ### Rules
@@ -96,28 +93,20 @@ On entering Session or Maintenance:
 | **Mutual exclusion** | `conflict` | Switching one on switches the other off; switching one off returns the other to its `initial_state` |
 | **Requirement** | `requires` | An output may only be on while the required output is on; when that goes off, it goes off too |
 
-Applied:
-- heat pump: `initial_state: on` (frost protection), `conflict` with the heater;
-- heater: `requires: spa_circulation`.
-
 ### Fault interlock
 A blocking layer above the state machine; the state machine itself has no fault handling.
-1. **A problem monitor becomes active:** the state machine goes to Standby (the same transition as Session switch off) and every output goes off, including the heat pump (it drives the circulation pump, which would run dry without water). The buzzer pulses 1 s on, 1 s off (never continuously on).
+1. **A problem monitor becomes active:** the state machine goes to Standby (the same transition as Session switch off) and every spa output goes off, also outputs whose `initial_state` is on (the heat pump drives the circulation pump, which would run dry without water). The buzzer pulses 1 s on, 1 s off (never continuously on).
 2. **While active:** every switch-on is refused, whether from the Session switch, a maintenance time or manual control. Exempt: the buzzer and the water level sensor's power output (otherwise the water level could never be measured again and the fault would never clear).
 3. **Cleared:** every output to its `initial_state`, as at controller start.
 
-Monitors (in config order):
-- water level (`WaterLow`): problem when the water is too low;
-- water temperature (`TempHigh`): problem above 40 °C, cleared below 39.5 °C;
-- frost (`Frost`): see [Frost protection](#frost-protection).
+Monitors are defined in the config (`monitors`). A monitor with `device_class: problem` triggers the fault interlock; a monitor with `force_on` is a [frost protection](#frost-protection)-type override.
 
 **The order of the blocks under `monitors` in the config is the priority of Spa Status: the first active monitor wins.** To change the priority, move the blocks. A monitor may also check monitors defined above it.
 
 Each monitor that compares a value has its own hysteresis, so sensor jitter around the limit does not toggle the fault.
 
 ### Frost protection
-A monitor with `force_on` keeps that output on while it is active; switching it off (or switching on its `conflict` partner) is refused. The fault interlock takes precedence.
-- frost: outside temperature (`spa_temp_3`) below 4 °C, or unknown (`unknown_active`) → heat pump forced on.
+A monitor with `force_on` keeps that output on while it is active; switching it off (or switching on its `conflict` partner) is refused. With `unknown_active` the monitor also counts as active when its value is unknown (sensor failure). The fault interlock takes precedence.
 
 ### Reporting to HA
 - **Session switch:** on during Session and Maintenance.
@@ -125,15 +114,15 @@ A monitor with `force_on` keeps that output on while it is active; switching it 
 
   | Value | When |
   |---|---|
-  | `Error` | Fault interlock active (water level too low or water above 40 °C) |
+  | `Error` | Fault interlock active |
   | `Active` | State Session (started with the Session switch) |
   | `Maintenance` | State Maintenance (clock-started run) |
-  | `Frost` | Frost protection active (outside below 4 °C or unknown) |
+  | `Frost` | A `force_on` monitor is active |
   | `Manual` | Standby with an output on whose `initial_state` is off |
   | `Standby` | None of the above |
 
   `Active`, `Maintenance` and `Standby` follow the state machine; `Error`, `Frost` and `Manual` are reporting only.
-- **Spa Status:** sensor with the `warning` of the first active monitor (`WaterLow` → `TempHigh` → `Frost`, the config order) or `Normal`. The attribute `active` lists all active warnings, e.g. `[WaterLow, Frost]`. The monitors themselves are not separate entities.
+- **Spa Status:** sensor with the `warning` of the first active monitor in config order, or `Normal`. The attribute `active` lists all active warnings. The monitors themselves are not separate entities.
 - Outputs, sensors and the water level input: each its own entity.
 
 ### Water level sensor
@@ -151,11 +140,11 @@ Between measurements the last reading is kept. The first measurement runs at sta
 - All of them put their results in one queue. Only the main loop reads the queue, touches the Spa and switches outputs; the one exception is the water level sensor, which switches its own power output from its thread (no other code uses that pin).
 
 ### Config
-- Section `disabled`: entity blocks moved here are not read (not set up, not announced to HA); outputs listed in the session/maintenance lists are skipped with a log warning. Move a block back to re-enable it. Currently: `spa_pump4` (not in use).
+- Section `disabled`: entity blocks moved here are not read (not set up, not announced to HA); outputs still listed in the session/maintenance lists are skipped with a log warning. Move a block back to re-enable it.
 - Per output: pin, on/off level, `initial_state`, optional `conflict` and `requires`, HA fields (`unique_id`, topics). Outputs with a `command_topic` are spa outputs; outputs without one (buzzer, water level power) are internal.
-- Per sensor (temperature and water level): measuring interval (start: 10 s).
-- Water level sensor: `power` (output `spa_water_level_power`, GPIO 22), settle time (start: 0.1 s).
-- Per monitor (order = Spa Status priority): `warning` (Spa Status value), limit and, for value checks, hysteresis (start: 0.5 °C); optional `force_on` (output kept on while active) and `unknown_active` (an unknown value counts as true).
+- Per sensor (temperature and water level): measuring interval.
+- Water level sensor: `power` (the output that powers it) and settle time.
+- Per monitor (order = Spa Status priority): `warning` (Spa Status value), limit and, for value checks, hysteresis; optional `force_on` (output kept on while active) and `unknown_active` (an unknown value counts as true).
 - Section `spa`: Session switch, `spa_operation` and Spa Status sensors (HA fields), circulation output, session list, maintenance list (lists of steps; outputs in one step switch on together), stagger delay, maintenance times (list of clock times, e.g. `["06:00", "18:00"]`), flush time, circulation duration, status log interval.
 
 ### Code structure
@@ -174,7 +163,7 @@ Between measurements the last reading is kept. The first measurement runs at sta
 
 ## Home Assistant
 - **Entities** come from MQTT discovery (device "Spa Controller"). Since HA 2026.06 a new entity gets the area as prefix (`garden_...`); rename it once in HA to `<domain>.spa_controller_<name>`. The name stays after restarts because the `unique_id` does not change.
-- **Removing an entity** (after taking it out of the config): publish an empty retained message to its discovery topic, e.g. action `mqtt.publish` with `topic: homeassistant/switch/spa-controller/spa_pump4/config`, `payload: ""`, `retain: true`. A new entity shows `unknown` for up to 60 s, until the next republish.
+- **Removing an entity** (after taking it out of the config): publish an empty retained message to its discovery topic, e.g. action `mqtt.publish` with `topic: homeassistant/<component>/spa-controller/<unique_id>/config`, `payload: ""`, `retain: true`. A new entity shows `unknown` for up to 60 s, until the next republish.
 - **Dashboard** "Jacuzzi" (`dashboard-jacuzzi`) is managed as code in the separate repo `homeassistant-dashboards` with hadsync (`hadsync validate/push/pull`). The Spa Operation row uses `custom:template-entity-row` for the state-dependent icon color.
 
 ## Tests
@@ -182,7 +171,7 @@ Scenario tests without hardware: `python tests/test_spa.py`. Run them before eve
 
 ## Open issues
 1. **Water level sensor override (temporary).** The sensor contacts are oxidized and report a false low-water problem, so `spa_water_level` in `managespacontroller.py.json` is inverted (`gpio_on: 0`, `gpio_off: 1`) and named `Spa Water Level (OVERRIDE)`. Low-water protection is effectively disabled. After repairing the sensor (replace bolts with A4/316 stainless, all same metal), swap `gpio_on`/`gpio_off` back and remove `(OVERRIDE)` from the name. Once repaired, the inverted config trips a water problem, so it can't go unnoticed.
-2. **Electrolysis on the water level electrodes.** The sensor runs on DC, which corrodes the anode; it is now only powered while measuring (see [Water level sensor](#water-level-sensor)). Still open: wire the sensor power to GPIO 22, after checking that the module works on 3V3 and within the GPIO current limit; otherwise power it through a relay (adjust `gpio_on`/`gpio_off` of `spa_water_level_power`).
+2. **Electrolysis on the water level electrodes.** The sensor runs on DC, which corrodes the anode; it is now only powered while measuring (see [Water level sensor](#water-level-sensor)). Still open: wire the sensor power to the pin of `spa_water_level_power`, after checking that the module works on 3V3 and within the GPIO current limit; otherwise power it through a relay (adjust `gpio_on`/`gpio_off` of `spa_water_level_power`).
 3. **Pumps switched on when HA rebooted while the heat pump was on.** Not visible in HA history. Unverified hypothesis: the script crashed while the MQTT broker (on the HA host) was down and systemd restarted it every 5 s. The controller now keeps running without a broker; check at the next HA reboot that nothing switches:
    ```bash
    journalctl -u managespacontroller.service --since "14 days ago" --no-pager | grep -E "Started|Stopped|exited|Traceback|Error|refused|failed" | tail -60
