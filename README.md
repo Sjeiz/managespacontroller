@@ -118,7 +118,7 @@ Each monitor that compares a value has its own hysteresis, so sensor jitter arou
 
 ### Reporting to HA
 - **Session switch:** on during Session and Maintenance.
-- **`spa_operation`:** sensor showing the highest applicable value: `Error` → `Session` → `Maintenance` → `Frost` (frost protection active) → `Manual` (an output deviating from its `initial_state`) → `Standby`. `Frost` and `Manual` are reporting only, not states.
+- **`spa_operation`:** sensor showing the highest applicable value: `Error` → `Session` → `Maintenance` → `Frost` (frost protection active) → `Manual` (an output on whose `initial_state` is off) → `Standby`. `Frost` and `Manual` are reporting only, not states.
 - Outputs, sensors, water level and monitors: each its own entity.
 
 ### Water level sensor

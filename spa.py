@@ -10,7 +10,7 @@ STANDBY = "Standby"
 SESSION = "Session"
 MAINTENANCE = "Maintenance"
 ERROR = "Error"
-MANUAL = "Manual"  # reported only: Standby with an output deviating from its initial state
+MANUAL = "Manual"  # reported only: Standby with an output on that is off by default
 FROST = "Frost"  # reported only: a force_on monitor (frost protection) is active
 
 
@@ -308,7 +308,7 @@ class Spa:
             return self.state
         if any(m.is_on and m.force_on for m in self.monitors):
             return FROST
-        if any(o.is_on != o.initial_on for o in self.outputs.values()):
+        if any(o.is_on and not o.initial_on for o in self.outputs.values()):
             return MANUAL
         return STANDBY
 
