@@ -157,6 +157,9 @@ Between measurements the last reading is kept. The first measurement runs at sta
 - Every class declares its attributes explicitly with defaults; config values are mapped onto them (no `setattr` from config, no `hasattr` checks).
 - No global variables.
 
+## Tests
+Scenario tests without hardware: `python tests/test_spa.py`. Run them before every commit. What they cover, how the stubs work and how to add a test: [tests/README.md](tests/README.md).
+
 ## Open issues
 1. **Water level sensor override (temporary).** The sensor contacts are oxidized and report a false low-water problem, so `spa_water_level` in `managespacontroller.py.json` is inverted (`gpio_on: 0`, `gpio_off: 1`) and named `Spa Water Level (OVERRIDE)`. Low-water protection is effectively disabled. After repairing the sensor (replace bolts with A4/316 stainless, all same metal), swap `gpio_on`/`gpio_off` back and remove `(OVERRIDE)` from the name. Once repaired, the inverted config trips a water problem, so it can't go unnoticed.
 2. **Electrolysis on the water level electrodes.** The sensor runs on DC, which corrodes the anode; it is now only powered while measuring (see [Water level sensor](#water-level-sensor)). Still open: wire the sensor power to GPIO 22, after checking that the module works on 3V3 and within the GPIO current limit; otherwise power it through a relay (adjust `gpio_on`/`gpio_off` of `spa_water_level_power`).
