@@ -28,6 +28,17 @@ journalctl -u managespacontroller.service --since "14 days ago" --no-pager | gre
 systemctl status managespacontroller
 ```
 
+## Secrets
+The MQTT user and password are not in git. They live on the Pi in `managespacontroller.secrets.json`, next to the script (listed in `.gitignore`). Without it the controller stops with an error. Create it once:
+
+```bash
+cd /home/SjeizAdmin/python/managespacontroller/managespacontroller
+cat > managespacontroller.secrets.json <<'EOF'
+{"mqtt": {"user": "<mqtt user>", "password": "<mqtt password>"}}
+EOF
+chmod 600 managespacontroller.secrets.json
+```
+
 ## Deploy
 The Pi runs a git clone of this repo; deploy by pushing to GitHub and pulling on the Pi.
 

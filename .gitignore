@@ -396,3 +396,6 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Local secrets (MQTT credentials), never in git
+managespacontroller.secrets.json

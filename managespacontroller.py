@@ -36,6 +36,8 @@ from spa import Spa
 log = logging.getLogger("managespacontroller")
 
 FIRST_READINGS_TIMEOUT_SECS = 15
+# Holds the MQTT user and password; not in git (see README, Secrets)
+SECRETS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "managespacontroller.secrets.json")
 
 
 def str2bool(value):
@@ -44,7 +46,14 @@ def str2bool(value):
 
 def load_config():
     with open(__file__ + ".json", "r", encoding="utf-8") as file:
-        return json.load(file)
+        config = json.load(file)
+    try:
+        with open(SECRETS_FILE, "r", encoding="utf-8") as file:
+            secrets = json.load(file)
+    except FileNotFoundError:
+        sys.exit(f"Secrets file missing: {SECRETS_FILE} (see README, Secrets)")
+    config["mqtt"].update(secrets.get("mqtt", {}))
+    return config
 
 
 def build_entities(config):
