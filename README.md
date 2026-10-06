@@ -9,7 +9,7 @@ The repo lives in `/home/SjeizAdmin/python/managespacontroller/managespacontroll
 
 ## Logs
 The script runs as the systemd service `managespacontroller` and logs to the journal.
-Logged: commands from HA (`Message received`), state changes (`State:`), switched outputs (`Output`), refused switch-ons (`Refused`) and faults (`Fault:`).
+Logged: commands from HA (`Message received`), state changes (`State:`), switched outputs (`Output`), refused switch-ons (`Refused`) and faults (`Fault:`). A status line (`Status:`) is logged at startup and every `status_log_secs` (default 300 s): state, outputs on, temperatures and inputs.
 
 ```bash
 # Follow live
@@ -125,7 +125,7 @@ Between measurements the last reading is kept. The first measurement runs at sta
 - Per sensor (temperature and water level): measuring interval (start: 10 s).
 - Water level sensor: `power` (output `spa_water_level_power`, GPIO 22), settle time (start: 0.1 s).
 - Per monitor: limit and, for value checks, hysteresis (start: 0.5 °C).
-- Section `spa`: Session switch and `spa_operation` sensor (HA fields), circulation output, session list, maintenance list (lists of steps; outputs in one step switch on together), stagger delay, maintenance times (list of clock times, e.g. `["06:00", "18:00"]`), flush time, circulation duration.
+- Section `spa`: Session switch and `spa_operation` sensor (HA fields), circulation output, session list, maintenance list (lists of steps; outputs in one step switch on together), stagger delay, maintenance times (list of clock times, e.g. `["06:00", "18:00"]`), flush time, circulation duration, status log interval.
 
 ### Code structure
 | Module | Contents |

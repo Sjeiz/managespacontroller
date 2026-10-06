@@ -2,7 +2,7 @@
 
 import logging
 
-from entities import Monitor, Output
+from entities import Input, Monitor, Output, TemperatureSensor
 
 log = logging.getLogger(__name__)
 
@@ -259,6 +259,22 @@ class Spa:
             self._publish_state()
 
     # ---- reporting -----------------------------------------------------------
+
+    def status_line(self):
+        """One-line summary for the periodic status log."""
+        status = ERROR if self.fault else self.state
+        if self.fault:
+            status += f" ({', '.join(self.warnings()) or 'problem'})"
+        on = " ".join(o.short_name or o.unique_id for o in self.outputs.values() if o.is_on) or "-"
+        temperatures = ", ".join(
+            f"{e.name}: {'-' if e.value is None else e.value} °C"
+            for e in self.entities.values()
+            if isinstance(e, TemperatureSensor)
+        )
+        inputs = ", ".join(
+            f"{e.name}: {e.state or '-'}" for e in self.entities.values() if isinstance(e, Input)
+        )
+        return f"Status: {status} | on: {on} | {temperatures} | {inputs}"
 
     def _publish_state(self):
         self.session_switch.is_on = self.state in (SESSION, MAINTENANCE)

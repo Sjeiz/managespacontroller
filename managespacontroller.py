@@ -178,6 +178,9 @@ def main():
 
     extra = [session_switch, operation_sensor]
     republished_at = time.monotonic()
+    status_log_secs = float(spa_config.get("status_log_secs", 300))
+    log.info(spa.status_line())
+    status_logged_at = time.monotonic()
     try:
         while True:
             while True:
@@ -195,6 +198,10 @@ def main():
 
             spa.tick(time.monotonic(), datetime.now())
             display.update(spa, time.time())
+
+            if time.monotonic() - status_logged_at >= status_log_secs:
+                status_logged_at = time.monotonic()
+                log.info(spa.status_line())
 
             if time.monotonic() - republished_at >= mqtt_config["republish_sec"]:
                 republished_at = time.monotonic()
