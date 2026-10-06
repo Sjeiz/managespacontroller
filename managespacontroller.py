@@ -1,912 +1,229 @@
-import RPi.GPIO as GPIO
-import paho.mqtt.client as MQTT
-import paho.mqtt.reasoncodes as reasoncodes
-import paho.mqtt.packettypes as packettypes
-import time
-from datetime import datetime, timedelta, timezone
-import os
-import weakref
-import sys
+"""Spa controller: builds the objects from the config and runs the main loop.
+
+Run as systemd service (python -u). Follow the log: journalctl -u managespacontroller.service -f
+Requires: sudo apt install python3-paho-mqtt; 1-wire enabled via raspi-config.
+"""
+
 import json
-from random import randrange
+import logging
+import os
+import queue
+import sys
+import time
+from datetime import datetime
 
-# from threading import Thread, Event
-# from LCDI2C_backpack import LCDI2C_backpack
-import traceback
+import paho.mqtt.client as MQTT
+import paho.mqtt.packettypes as packettypes
+import paho.mqtt.reasoncodes as reasoncodes
+import RPi.GPIO as GPIO
+
 import liquidcrystal_i2c  # https://github.com/pl31/python-liquidcrystal_i2c/tree/master
-
-os.system("clear")
-print("Spa Controller: Script started")
-
-# sudo apt install python3-paho-mqtt
-# Enable 1 wire interface using sudo raspi-config
-
-# This script is run at boot using systemd
-# https://www.dexterindustries.com/howto/run-a-program-on-your-raspberry-pi-at-startup/
-
-# About logging to journal
-# run python in unbuffered mode (python -u scriptname)
-# To follow messages: journalctl -u managespacontroller.service -f
-# To stop the messages, set the debug parameter False in the config file
-
-# To restart the script: sudo systemctl restart managespacontroller.service
-
-# sudo apt install python3-luma.lcd
-# https://github.com/rm-hull/luma.lcd
-
-
-### Begin class definitions ###
-
-
-class Gpio(object):
-    def __init__(self, unique_id, config):
-        # Add all attributes from config file
-        for key, value in config.items():
-            if debug:
-                print(f"Initializing Gpio[{config['name']}][{key}] = {value}")
-            setattr(self, key, value)
-
-        # Add additional attributes
-        self.unique_id = unique_id
-        self._value = None
-        self._changed_on = datetime.now()
-        self.actor = "automation"
-
-    @property
-    def value(self):
-        if self._value == None:
-            # No value available yet, get it!
-            self.read()
-        return self._value
-
-    @value.setter
-    def value(self, value):
-        if self._value != value:
-            if debug:
-                print(f"Gpio[{self.name}] --> {value}")
-            if self.direction == "output":
-                state = self.gpio_off if value == self.payload_off else self.gpio_on
-                GPIO.output(self.pin, state)
-
-            self._value = value
-            self._changed_on = datetime.now()
-            self.publish()
-
-    def set_io_direction(self):
-        # def get_initial_state(self):
-        #    return self.gpio_on if hasattr(self, 'initial_state') and self.initial_state == 'on' else self.gpio_off
-
-        if self.direction == "output":
-            # Drive the off-level before switching to output, so active-low relays don't pulse on at startup
-            GPIO.setup(self.pin, GPIO.OUT, initial=self.gpio_off)
-        else:
-            if hasattr(self, "pull_up_down"):
-                match self.pull_up_down:
-                    case "up":
-                        pull_up_down = GPIO.PUD_UP
-                    case "down":
-                        pull_up_down = GPIO.PUD_DOWN
-                    case "off":
-                        pull_up_down = GPIO.PUD_OFF
-                    case _:
-                        pull_up_down = GPIO.PUD_DOWN
-            else:
-                pull_up_down = GPIO.PUD_DOWN
-            GPIO.setup(self.pin, GPIO.IN, pull_up_down)
-
-    def read(self):
-        self.value = (
-            self.payload_on
-            if GPIO.input(self.pin) == self.gpio_on
-            else self.payload_off
-        )
-
-    def write(self, state):
-        if self.direction == "output":
-            if problem_detection.state == True:
-                state = self.payload_off
-            else:
-                # Detect conflicts
-                if hasattr(self, "conflict"):
-                    gpio_conflict = mySpa[self.conflict]
-                    if state == self.payload_on:
-                        gpio_conflict.value = gpio_conflict.payload_off
-                    elif gpio_conflict.value != gpio_conflict.initial_state:
-                        gpio_conflict.value = gpio_conflict.initial_state
-
-            state_pin = self.gpio_off if state == self.payload_off else self.gpio_on
-            GPIO.output(self.pin, state_pin)
-        self._value = state
-        self._changed_on = datetime.now()
-        self.publish()
-
-        if hasattr(self, "actions_on") and state == self.payload_on:
-            for key, value in self.actions_on.items():
-                mySpa[key].write(value)
-        elif hasattr(self, "actions_off") and state == self.payload_off:
-            for key, value in self.actions_off.items():
-                mySpa[key].write(value)
-        return
-
-    def publish(self):
-        if hasattr(self, "state_topic"):
-            if debug:
-                print(f"Gpio[{self.name}] = {self._value}")
-            # Publish payload
-            client.publish(self.state_topic, self._value)
-            # Publish timestamp
-            client.publish(
-                mySpa["spa_timestamp"].state_topic, mySpa["spa_timestamp"]._value
-            )
-        return
-
-    def is_active(self):
-        # Inputs are sensors: their state counts regardless of actor
-        if self.direction == "input":
-            return self.value == self.payload_on
-        if self.value == self.payload_on and self.actor != "automation":
-            return True
-        else:
-            return False
-
-    def schedule(self):
-        if (
-            hasattr(self, "schedule_on_secs")
-            and not (mySpa["spa_operation"].is_active())
-            and not (mySpa["spa_status"].is_active())
-        ):
-            seconds_on = self.schedule_on_secs
-            seconds_off = self.schedule_off_secs + randrange(
-                10
-            )  # Add some random time to prevent all pumps from switching on at the same time
-            # Note: Do not use the IsActive function, because it doesn't work if set by automation
-            if not (
-                self._value == self.payload_on
-            ) and datetime.now() > self._changed_on + timedelta(seconds=seconds_off):
-                # Start ON schedule
-                if debug:
-                    print(
-                        f"Gpio[{self.name}] *** Starting ON schedule for {seconds_on} seconds"
-                    )
-                self.actor = "automation"
-                self.write(self.payload_on)
-            elif (
-                self._value == self.payload_on
-                and datetime.now() > self._changed_on + timedelta(seconds=seconds_on)
-            ):
-                # Start OFF schedule
-                if debug:
-                    print(
-                        f"Gpio[{self.name}] *** Starting OFF schedule for {seconds_off} seconds"
-                    )
-                self.actor = "automation"
-                self.write(self.payload_off)
-
-    def status_message(self):
-        if self.value == self.payload_on and hasattr(self, "short_name"):
-            return str(self.short_name)
-        else:
-            return None
-
-
-class Sensor(object):
-    def __init__(self, unique_id, config):
-        # Add all attributes from config file
-        for key, value in config.items():
-            if debug:
-                print(f"Initializing Sensor[{config['name']}][{key}] = {value}")
-            setattr(self, key, value)
-
-        # Add additional attributes
-        self.unique_id = unique_id
-        self._value = None
-        self._changed_on = None
-
-    @property
-    def value(self):
-        if self._value == None:
-            # No value available yet, get it!
-            self.read()
-        return self._value
-
-    @value.setter
-    def value(self, value):
-        # if self._value != value: #TODO: dampen minor value changes
-        if (
-            self._value is None
-            # or self._value + 0.1 < value
-            # or value < self._value - 0.1
-            or round(self._value, getattr(self, "round_digits", 1))
-            != round(value, getattr(self, "round_digits", 1))
-        ):
-            if debug:
-                print(f"Sensor[{self.name}] = {value}")
-            self._value = value
-            self._changed_on = datetime.now()
-            # Publish payload
-            self.publish()
-
-    def read(self):
-        def read_w1sensor_file(device_file):
-            f = open(device_file, "r")
-            lines = f.readlines()
-            f.close()
-            return lines
-
-        def get_w1sensor_value(sensor):
-            value = 0
-            try:
-                lines = read_w1sensor_file(sensor.filename)
-                while lines[0].strip()[-3:] != "YES":
-                    time.sleep(0.2)
-                    lines = read_w1sensor_file(sensor.filename)
-                equals_pos = lines[1].find("t=")
-                if equals_pos != -1:
-                    value = (lines[1][equals_pos + 2 :]).strip()
-                    if value.isnumeric():
-                        value = float(value)
-                        if hasattr(sensor, "scale"):
-                            value = value * sensor.scale
-                        if hasattr(sensor, "offset"):
-                            value += sensor.offset
-                        if hasattr(sensor, "round_digits"):
-                            value = round(value, sensor.round_digits)
-
-            except Exception as error:
-                if debug:
-                    print(f"Sensor[{sensor.name}]: {error}!")
-                value = 0
-            finally:
-                return value
-
-        match self.sensor_type:
-            case "w1sensor":
-                self.value = get_w1sensor_value(self)
-            case "timestamp":
-                datestr = "%-y%m%d%H%M%S"
-                datestr += (
-                    "W" if time.daylight == 0 else "S"
-                )  # S=summer time, W=winter time
-                self._value = datetime.now().strftime(datestr)
-                pass
-            case _:
-                # Sensor type not defined
-                self.value = None
-
-    def publish(self):
-        if self.device_class != "timestamp":
-            if debug:
-                print(f"Sensor[{self.name}] = {self._value}")
-            # Publish payload
-            client.publish(self.state_topic, self._value)
-            # Publish timestamp
-            client.publish(
-                mySpa["spa_timestamp"].state_topic, mySpa["spa_timestamp"]._value
-            )
-
-
-class Monitor(object):
-    def __init__(self, unique_id, config):
-        # Add all attributes from config file
-        for key, value in config.items():
-            if debug:
-                print(f"Initializing Monitor[{config['name']}][{key}] = {value}")
-            setattr(self, key, value)
-
-        # Add additional attributes
-        self.unique_id = unique_id
-        self._value = None
-        self._changed_on = None
-
-    @property
-    def value(self):
-        if self._value == None:
-            # No value available yet, get it!
-            self.read()
-        return self._value
-
-    @value.setter
-    def value(self, value):
-        if self._value != value:
-            if debug:
-                print(f"Monitor[{self.name}] = {value}")
-            self._value = value
-            self._changed_on = datetime.now()
-            # Publish payload
-            self.publish()
-
-    def read(self):
-        status = self.payload_off
-        if self.unique_id == "spa_operation":
-            pass
-        for key, value in self.monitor.items():
-            monitorarr = value.split(",")
-            check2perform = monitorarr[0].strip()
-            sensor2check = monitorarr[1].strip()
-            value2check = None if len(monitorarr) < 3 else monitorarr[2].strip()
-
-            match check2perform:
-                case "state_on":
-                    if mySpa[sensor2check].is_active():
-                        status = self.payload_on
-                case "state_off":
-                    if not (mySpa[sensor2check].is_active()):
-                        status = self.payload_on
-                case "state_on_ignore_automation":
-                    if (
-                        mySpa[sensor2check].is_active()
-                        and mySpa[sensor2check].actor != "automation"
-                    ):
-                        status = self.payload_on
-                case "state_off_ignore_automation":
-                    if (
-                        not (mySpa[sensor2check].is_active())
-                        and mySpa[sensor2check].actor != "automation"
-                    ):
-                        status = self.payload_on
-                case "value_greater":
-                    if mySpa[sensor2check].value > int(value2check):
-                        status = self.payload_on
-                case "value_less":
-                    if mySpa[sensor2check].value < int(value2check):
-                        status = self.payload_on
-                case "value_equal":
-                    if mySpa[sensor2check].value == int(value2check):
-                        status = self.payload_on
-                case "value_not_equal":
-                    if mySpa[sensor2check].value != int(value2check):
-                        status = self.payload_on
-                case "time_on":
-                    if mySpa[sensor2check].is_active() and datetime.now() > mySpa[
-                        sensor2check
-                    ]._changed_on + timedelta(seconds=int(value2check)):
-                        status = self.payload_on
-                        if sensor2check.name == "Spa Operation":
-                            pass
-                case "time_off":
-                    if not (mySpa[sensor2check].is_active()) and datetime.now() > mySpa[
-                        sensor2check
-                    ]._changed_on + timedelta(seconds=int(value2check)):
-                        status = self.payload_on
-                case _:
-                    if debug:
-                        print(
-                            f"ERROR! Unknown monitor command ({check2perform}) defined for {mySpa[sensor2check].name}"
-                        )
-
-            if status == self.payload_on:
-                break  # At least one check is positive, exit loop
-        if self.unique_id == "spa_operation":
-            pass
-        self.value = status
-
-    def publish(self):
-        if debug:
-            print(f"Monitor[{self.name}] = {self._value}")
-        # Publish payload
-        client.publish(self.state_topic, self._value)
-        # Publish timestamp
-        client.publish(
-            mySpa["spa_timestamp"].state_topic, mySpa["spa_timestamp"]._value
-        )
-
-    def is_active(self):
-        if self.value == self.payload_on:
-            return True
-        else:
-            return False
-
-
-class Problem(object):
-    def __init__(self):
-        self.state = False
-        self.last_state = False
-        self.problem = None
-
-    def check(self):
-        new_state = False
-        problem = "WARNING:"
-        for monitor in get_list_by_type(mySpa, Monitor):
-            if monitor.is_active() and monitor.device_class == "problem":
-                new_state = True
-                myLCD.on()
-                if hasattr(monitor, "warning"):
-                    problem += " " + monitor.warning
-
-        self.last_state = self.state
-        self.state = new_state
-        if self.state:
-            if myLCD._activity_dot != " ":
-                GPIO.output(mySpa["spa_buzzer"].pin, mySpa["spa_buzzer"].gpio_on)
-            else:
-                GPIO.output(mySpa["spa_buzzer"].pin, mySpa["spa_buzzer"].gpio_off)
-            myLCD._statusmessage = problem
-            myLCD.printstatusmessage()
-        else:
-            GPIO.output(mySpa["spa_buzzer"].pin, mySpa["spa_buzzer"].gpio_off)
-            if self.state != self.last_state:
-                myLCD.clearline(0)
-
-
-class myLCDI2C(liquidcrystal_i2c.LiquidCrystal_I2C):
-    def __init__(self, addr, port, numlines=4, numcolumns=20):
-        print("ChildB init'ed")
-        super().__init__(addr, port, numlines)
-        self._activity_dot = " "
-        self._numcolumns = numcolumns  # width of the display
-        self._statusmessage = None
-
-    # overloaded original function
-    # add spaces to clear the rest of the line
-    # display off if spa not active and no problems found
-    def printline(self, linenr, value):
-        if value is not None:
-            _spaisactive = False
-            _spaisproblem = False
-            try:
-                _spaisactive = mySpa["spa_operation"].is_active()
-            except:
-                pass
-            try:
-                _spaisproblem = mySpa["spa_status"].is_active()
-            except:
-                pass
-            if _spaisactive or _spaisproblem:
-                self.on()
-                self.setCursor(0, linenr)
-                spaces = " " * (self._numcolumns - len(value))
-                self.printstr(value + spaces)
-            else:
-                self.off()
-
-    # split the string over multiple lines starting at linenr
-    def printmultiline(self, linenr, value):
-        if value is not None:
-            line = linenr
-            # Clear all lines starting at the indicated linenr
-            for i in range(self._numlines - linenr):
-                self.clearline(i)
-            # split the messaage and display on multiple lines
-            while len(value) > 0:
-                slice = value[0 : self._numcolumns]
-                value = value[self._numcolumns :]
-                # self.clearline(line)
-                self.printline(line, slice)
-                line += 1
-
-    def clearline(self, linenr):
-        # fills the indicated line with spaces
-        self.printline(linenr, " " * self._numcolumns)
-
-    def printlinejustified(self, linenr, valueleft, valueright):
-        if valueleft is not None and valueright is not None:
-            spaces = " " * (self._numcolumns - len(valueleft) - len(valueright))
-            message = valueleft + spaces + valueright
-            self.printline(linenr, message)
-
-    def off(self):
-        if self._displaycontrol == self._LCD_DISPLAYON:
-            self.noDisplay()
-        if self._backlightval == self._LCD_BACKLIGHT:
-            self.noBacklight()
-
-    def on(self):
-        if self._backlightval == self._LCD_NOBACKLIGHT:
-            self.backlight()
-        if self._displaycontrol == self._LCD_DISPLAYOFF:
-            self.display()
-
-    def clearstatusmessage(self):
-        self._statusmessage = None
-
-    def buildstatusmessage(self, value):
-        if value is not None:
-            self._statusmessage = (
-                value
-                if self._statusmessage is None
-                else self._statusmessage + " " + value
-            )
-
-    def toggle_activity_dot(self):
-        self._activity_dot = "*" if self._activity_dot == " " else " "
-
-    def printstatusmessage(self):
-        if self._statusmessage is not None:
-            self.toggle_activity_dot()
-            self.printlinejustified(0, self._statusmessage, self._activity_dot)
-
-
-# class SpaController:  # subscriptable
-#     def __init__(self):
-#         # self._activity_dot = " "
-
-#         # Create object instances
-#         # mySpa = {}
-#         for gpio in config["gpios"]:
-#             self.__dict__[gpio] = Gpio(gpio, config["gpios"][gpio])
-#         for sensor in config["sensors"]:
-#             self.__dict__[sensor] = Sensor(sensor, config["sensors"][sensor])
-#         for monitor in config["monitors"]:
-#             self.__dict__[monitor] = Monitor(monitor, config["monitors"][monitor])
-
-#     def __getitem__(self, item):
-#         return self.Fruits[item]
-
-
-### End class definitions ###
-
-
-### Begin MQTT functions ###
-
-
-def connect_mqtt_broker(client, MQTT_SERVER, MQTT_PORT, MQTT_KEEPALIVE):
-    if debug:
-        print("\nStarting connection")
-    client.connect(
-        host=MQTT_SERVER, port=MQTT_PORT, keepalive=MQTT_KEEPALIVE, clean_start=True
-    )
-    return
-
-
-# Callback function when connection is established
-def on_connect(client, userdata, flags, rc, other):
-    if rc == 0:
-        if debug:
-            print("Connection success!")
-        client.connected_flag = True
-        # Send online message
-        client.publish(
-            config["mqtt"]["statustopic"],
-            payload=config["mqtt"]["statusonline"],
-            qos=config["mqtt"]["qos"],
-        )
-        # Subscribe to messages
-        if debug:
-            print("Subscribe to mqtt messages: " + config["mqtt"]["subscribe_topic"])
-        client.subscribe(config["mqtt"]["subscribe_topic"])
-
-        # publish_ha_autodiscovery(config, client)
-    else:
-        client.connected_flag = False
-        if debug:
-            print(f"Connection failed with code {rc}")
-    return
-
-
-# Callback function when connection is disconnected gracefully
-def on_disconnect(client, userdata, flags, rc):
-    connected_flag = False
-    if debug:
-        print(f"Disconnected gracefully with code {rc}")
-    return
-
-
-# Callback function when a message is sent
-def on_publish(client, userdata, result):
-    # if debug: print("-->MQTT message sent")
-    # Publish timestamp
-    # client.publish(mySpa["spa_timestamp"].state_topic,
-    #                mySpa["spa_timestamp"]._value)
-    # topic=mySpa["spa_timestamp"].state_topic
-    # value=mySpa["spa_timestamp"].value
-    # print(f"{topic}={value}")
-    pass
-    return
-
-
-# Callback function when a message is received
-def on_message(client, userdata, msg):
-    target = (msg.topic).split("/")[1]
-    value = (msg.payload).decode("UTF-8")
-    qos = msg.qos
-
-    if debug:
-        print(f"\nMessage received: {target=}, {value=}, {qos=}")
-    mySpa[target].actor = "user"
-    mySpa[target].write(value)
-    # XXX
-    # if value == mySpa[target].payload_on:
-    #    mySpa[]
-
-    return
-
-
-def publish_ha_discovery_info(entry):
-    if hasattr(entry, "config_topic"):
-        # Build device message
-        device_dict = {
-            "device": config["mqtt"]["device"],
-        }
-
-        # Build payload message
-        payload_dict = {
-            "device_class": entry.device_class,
-            "name": entry.name,
-            "state_topic": entry.state_topic,
-            "unique_id": entry.unique_id,
-        }
-        if hasattr(entry, "command_topic"):
-            payload_dict.update({"command_topic": entry.command_topic})
-        if hasattr(entry, "payload_off"):
-            payload_dict.update({"payload_off": entry.payload_off})
-        if hasattr(entry, "payload_on"):
-            payload_dict.update({"payload_on": entry.payload_on})
-        if hasattr(entry, "value_template"):
-            payload_dict.update({"value_template": entry.value_template})
-        if hasattr(entry, "unit_of_measurement"):
-            payload_dict.update({"unit_of_measurement": entry.unit_of_measurement})
-
-        # Merge device_dict and payload_dict
-        device_dict.update(payload_dict)
-
-        # Convert to JSON
-        payload_json = json.dumps(device_dict)
-
-        # Publish discovery message to MQTT
-        if debug:
-            print("Publishing MQTT discovery message to " + entry.config_topic)
-        if debug:
-            print(payload_json)
-        client.publish(
-            entry.config_topic,
-            payload=payload_json,
-            qos=config["mqtt"]["qos"],
-            retain=True,
-        )
-        # Publish timestamp
-        # client.publish(mySpa["spa_timestamp"].state_topic,
-        #                mySpa["spa_timestamp"]._value)
-
-
-# End MQTT functions
-
-# Generic functions
-
-
-def str2bool(v):
-    return v.lower() in ("yes", "true", "t", "1")
-
-
-def get_list_by_type(sensorList, sensorType):
-    # Returns a subset of list based on provided type
-    myReturnList = []
-    for item in sensorList:
-        if type(sensorList[item]) == sensorType:
-            myReturnList.append(sensorList[item])
-    return myReturnList
-
-
-# End Generic functions
-
-
-############
-### MAIN ###
-############
-
-# Declare global variables
-global debug
-global config
-global client
-
-
-# Load configuration file
-with open(__file__ + ".json", "r") as jsonfile:
-    config = json.load(jsonfile)
-    debug = str2bool(config["mqtt"]["debug"])
-    if debug:
-        print("Configuration read successful")
-
-# Initialize LCD display
-myLCD = myLCDI2C(addr=0x27, port=1, numlines=4)
-myLCD.printline(0, "Program started!")
-
-# Initialize basic sensor and gpio settings
-# Enable 1 wire temperature sensors
-os.system("modprobe w1-gpio")
-os.system("modprobe w1-therm")
-# Generic GPIO settings
-GPIO.setmode(GPIO.BCM)
-GPIO.setwarnings(False)
-
-# Create object instances
-# xxx https://stackoverflow.com/questions/1325673/how-to-add-property-to-a-class-dynamically
-# mySpa = SpaController()
-mySpa = {}
-for gpio in config["gpios"]:
-    mySpa[gpio] = Gpio(gpio, config["gpios"][gpio])
-for sensor in config["sensors"]:
-    mySpa[sensor] = Sensor(sensor, config["sensors"][sensor])
-for monitor in config["monitors"]:
-    mySpa[monitor] = Monitor(monitor, config["monitors"][monitor])
-
-# Initialize gpio input/output direction
-for gpio in get_list_by_type(mySpa, Gpio):
-    gpio.set_io_direction()
-
-# Create MQTT Client instance
-client = MQTT.Client(protocol=MQTT.MQTTv5)
-client.username_pw_set(
-    username=config["mqtt"]["user"], password=config["mqtt"]["password"]
+from display import Display
+from entities import (
+    Input,
+    MeasuringEntity,
+    Monitor,
+    OperationSensor,
+    Output,
+    Publisher,
+    SessionSwitch,
+    TemperatureSensor,
+    TimestampSensor,
+    WaterLevelSensor,
 )
-client.will_set(
-    config["mqtt"]["statustopic"],
-    config["mqtt"]["statusoffline"],
-    qos=config["mqtt"]["qos"],
-)
-client.connected_flag = False
+from spa import Spa
 
-# Set the callback functions for the MQTT client
-client.on_connect = on_connect
-client.on_publish = on_publish
-client.on_message = on_message
-client.on_disconnect = on_disconnect
+log = logging.getLogger("managespacontroller")
 
-# Connect to the MQTT broker
-connect_mqtt_broker(
-    client,
-    config["mqtt"]["server"],
-    config["mqtt"]["port"],
-    config["mqtt"]["keepalive"],
-)
+FIRST_READINGS_TIMEOUT_SECS = 15
 
-# Start the MQTT loop to receive messages
-client.loop_start()
 
-# Wait for the MQTT connection to be established
-while not client.connected_flag:
-    time.sleep(0.5)
+def str2bool(value):
+    return str(value).lower() in ("yes", "true", "t", "1")
 
-# Get initial monitor readings. This will automatically initialize underlying sensors values
-for monitor in get_list_by_type(mySpa, Monitor):
-    monitor.read()
 
-# Publish HA autodiscovery information
-for item in mySpa.items():
-    publish_ha_discovery_info(item[1])
+def load_config():
+    with open(__file__ + ".json", "r", encoding="utf-8") as file:
+        return json.load(file)
 
-# Initialize problem_detection
-problem_detection = Problem()
 
-# Check for initial problems before setting gpio initial states
-problem_detection.check()
+def build_entities(config):
+    entities = {}
+    for uid, cfg in config["gpios"].items():
+        if cfg.get("direction") == "output":
+            entities[uid] = Output(uid, cfg)
+        elif "power" in cfg:
+            entities[uid] = WaterLevelSensor(uid, cfg)
+        else:
+            entities[uid] = Input(uid, cfg)
+    timestamp = None
+    for uid, cfg in config["sensors"].items():
+        if cfg.get("sensor_type") == "w1sensor":
+            entities[uid] = TemperatureSensor(uid, cfg)
+        elif cfg.get("sensor_type") == "timestamp":
+            timestamp = TimestampSensor(uid, cfg)
+            entities[uid] = timestamp
+        else:
+            log.error("Sensor %s has unknown sensor_type, ignored", uid)
+    for uid, cfg in config["monitors"].items():
+        entities[uid] = Monitor(uid, cfg)
+    for entity in entities.values():
+        if isinstance(entity, WaterLevelSensor) and entity.power_id:
+            entity.power = entities[entity.power_id]
+    return entities, timestamp
 
-# Set gpio initial_states (gpio_off if problem detected)
-for gpio in get_list_by_type(mySpa, Gpio):
-    if gpio.direction == "output":
-        gpio.actor = "automation"
-        gpio.write(gpio.initial_state)
 
-# Set the republished date/time
-republished_on = datetime.now()
+def create_mqtt_client(mqtt_config, events):
+    client = MQTT.Client(protocol=MQTT.MQTTv5)
+    client.username_pw_set(username=mqtt_config["user"], password=mqtt_config["password"])
+    client.will_set(mqtt_config["statustopic"], mqtt_config["statusoffline"], qos=mqtt_config["qos"])
 
-try:
-    while True:
-        myLCD.clearstatusmessage()
-        for gpio in get_list_by_type(mySpa, Gpio):
-            gpio.read()
-            if not problem_detection.state:
-                gpio.schedule()
-            myLCD.buildstatusmessage(gpio.status_message())
-        myLCD.printstatusmessage()
+    # Callbacks run in the paho thread: they only put events in the queue
+    def on_connect(client, userdata, flags, rc, properties=None):
+        if rc == 0:
+            client.subscribe(mqtt_config["subscribe_topic"])
+            events.put(("connected",))
+        else:
+            log.warning("MQTT connection failed: %s", rc)
 
-        i = 1  # Temperature messages on line 1 - 3
-        for sensor in get_list_by_type(mySpa, Sensor):
-            sensor.read()
-            if sensor.device_class == "temperature":
-                myLCD.printlinejustified(
-                    linenr=i, valueleft=sensor.name + ":", valueright=str(sensor.value)
-                )
-                i += 1
+    def on_disconnect(client, userdata, *args):
+        log.warning("MQTT disconnected")
 
-        for monitor in get_list_by_type(mySpa, Monitor):
-            monitor.read()
+    def on_message(client, userdata, msg):
+        parts = msg.topic.split("/")
+        if len(parts) >= 2:
+            events.put(("command", parts[1], msg.payload.decode("UTF-8")))
 
-        # Check problem status and act accordingly
-        problem_detection.check()
-        if problem_detection.state != problem_detection.last_state:
-            if problem_detection.state == True:
-                # Problem is detected -> Switch all gpios off
-                for gpio in get_list_by_type(mySpa, Gpio):
-                    gpio.actor = "automation"
-                    gpio.write(gpio.payload_off)
-            else:
-                # Problem is solved -> Switch all gpios to initial_state
-                for gpio in get_list_by_type(mySpa, Gpio):
-                    if gpio.direction == "output":
-                        gpio.actor = "automation"
-                        gpio.write(gpio.initial_state)
+    client.on_connect = on_connect
+    client.on_disconnect = on_disconnect
+    client.on_message = on_message
+    return client
 
-        # Republish all states/values if time has elapsed
-        if datetime.now() > republished_on + timedelta(
-            seconds=config["mqtt"]["republish_sec"]
-        ):
-            republished_on = datetime.now()
 
-            # Timer has elapsed. Republish HA autodiscovery messages
-            if debug:
-                print("\nTimer has elapsed. Republishing all HA autodiscovery messages")
-            client.publish(
-                config["mqtt"]["statustopic"],
-                payload=config["mqtt"]["statusonline"],
-                qos=config["mqtt"]["qos"],
-            )
-            # Publish timestamp
-            client.publish(
-                mySpa["spa_timestamp"].state_topic, mySpa["spa_timestamp"]._value
-            )
-            for gpio in get_list_by_type(mySpa, Gpio):
-                publish_ha_discovery_info(gpio)
-            for sensor in get_list_by_type(mySpa, Sensor):
-                publish_ha_discovery_info(sensor)
-            for monitor in get_list_by_type(mySpa, Monitor):
-                publish_ha_discovery_info(monitor)
+def publish_all(publisher, entities, extra, mqtt_config):
+    publisher.status(mqtt_config["statustopic"], mqtt_config["statusonline"])
+    for topic in mqtt_config.get("obsolete_discovery_topics", []):
+        publisher.remove_discovery(topic)
+    for entity in list(entities.values()) + extra:
+        publisher.discovery(entity)
+        publisher.state(entity)
 
-            # Timer has elapsed. Republish all states/values
-            if debug:
-                print("\nTimer has elapsed. Republishing all states")
-            for gpio in get_list_by_type(mySpa, Gpio):
-                gpio.publish()
-            for sensor in get_list_by_type(mySpa, Sensor):
-                sensor.publish()
-            for monitor in get_list_by_type(mySpa, Monitor):
-                monitor.publish()
-            # Republish HA autodiscovery messages
 
-        # if debug: print(f"Going to sleep for {config['mqtt']['sleep']} seconds...")
-        time.sleep(config["mqtt"]["sleep"])
+def wait_for_first_readings(events, entities, pending):
+    """Collect events until every measuring entity has reported once (or timeout)."""
+    measuring = [e for e in entities.values() if isinstance(e, MeasuringEntity)]
+    deadline = time.monotonic() + FIRST_READINGS_TIMEOUT_SECS
+    while time.monotonic() < deadline and not all(e.measured for e in measuring):
+        try:
+            event = events.get(timeout=0.5)
+        except queue.Empty:
+            continue
+        if event[0] == "reading" and event[1] in entities:
+            entities[event[1]].apply(event[2])
+        else:
+            pending.append(event)
+    missing = [e.unique_id for e in measuring if not e.measured]
+    if missing:
+        log.warning("No first reading from %s", missing)
 
-except KeyboardInterrupt:
-    if debug:
-        print("\nSpa Controller: Script halted")
-    mySpa["spa_status"].value = mySpa[
-        "spa_status"
-    ].payload_on  # This will switch on display
-    myLCD.clear()
-    myLCD.printline(0, "Program stopped!")
-    myLCD.printline(1, "CTRL-C pressed.")
 
-except Exception as e:
-    # this catches ALL other exceptions including errors.
-    # You won't get any error messages for debugging
-    # so only use it once your code is working
-    if debug:
-        print("Other error or exception occurred!")
-    exception_type, exception_object, exception_traceback = sys.exc_info()
-    # print(e.args[0])
-    # print(exception_type)
-    # print(exception_object)
-    # print(exception_traceback)
-    # message = "Line{line}:{error}".format(line=exception_traceback.tb_lineno,error=type(e).__name__)
-    message = "Line{line}:{errortype}({error})".format(
-        line=exception_traceback.tb_lineno, errortype=type(e).__name__, error=e
+def main():
+    config = load_config()
+    mqtt_config = config["mqtt"]
+    logging.basicConfig(
+        level=logging.DEBUG if str2bool(mqtt_config.get("debug", "false")) else logging.INFO,
+        format="%(message)s",
+        stream=sys.stdout,
     )
-    mySpa["spa_status"].value = mySpa[
-        "spa_status"
-    ].payload_on  # This will switch on display
-    myLCD.clear()
-    myLCD.printmultiline(0, message)
+    log.info("Spa Controller: script started")
 
-finally:
-    # Revert to initial gpio states before quitting
-    for gpio in get_list_by_type(mySpa, Gpio):
-        if gpio.direction == "output":
-            gpio.actor = "automation"
-            gpio.write(gpio.initial_state)
+    os.system("modprobe w1-gpio")
+    os.system("modprobe w1-therm")
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
 
-    # Sound alarm
-    # mySpa['spa_buzzer'].value = mySpa['spa_buzzer'].payload_on
+    entities, timestamp = build_entities(config)
+    for entity in entities.values():
+        if isinstance(entity, (Output, Input)):
+            entity.setup()
 
-    # Stop the MQTT loop and disconnect from the MQTT Broker
-    if debug:
-        print("\nDisconnect from broker")
-    client.loop_stop()
-    client.publish(
-        config["mqtt"]["statustopic"],
-        payload=config["mqtt"]["statusoffline"],
-        qos=config["mqtt"]["qos"],
+    events = queue.Queue()
+    client = create_mqtt_client(mqtt_config, events)
+    publisher = Publisher(client, mqtt_config["device"], mqtt_config["qos"])
+    publisher.timestamp = timestamp
+
+    spa_config = config["spa"]
+    session_switch = SessionSwitch("spa_session", spa_config["session_switch"])
+    operation_sensor = OperationSensor("spa_operation", spa_config["operation_sensor"])
+    spa = Spa(spa_config, entities, session_switch, operation_sensor, publisher)
+
+    lcd = liquidcrystal_i2c.LiquidCrystal_I2C(0x27, 1, numlines=4)
+    temperature_sensors = [e for e in entities.values() if isinstance(e, TemperatureSensor)]
+    display = Display(lcd, entities["spa_buzzer"], temperature_sensors)
+    display.message(["Program started!"])
+
+    # Connect asynchronously: paho keeps retrying, so a broker that is down doesn't stop the spa
+    client.connect_async(
+        host=mqtt_config["server"], port=mqtt_config["port"], keepalive=mqtt_config["keepalive"]
     )
-    # Publish timestamp
-    client.publish(mySpa["spa_timestamp"].state_topic, mySpa["spa_timestamp"]._value)
-    client.disconnect(
-        reasoncodes.ReasonCodes(packettypes.PacketTypes.DISCONNECT, "Disconnect", 4)
-    )
+    client.loop_start()
+
+    for entity in entities.values():
+        if isinstance(entity, MeasuringEntity):
+            entity.start(events)
+
+    pending = []
+    wait_for_first_readings(events, entities, pending)
+    spa.start()
+    for event in pending:
+        events.put(event)
+
+    extra = [session_switch, operation_sensor]
+    republished_at = time.monotonic()
+    try:
+        while True:
+            while True:
+                try:
+                    event = events.get_nowait()
+                except queue.Empty:
+                    break
+                if event[0] == "reading":
+                    spa.handle_reading(event[1], event[2])
+                elif event[0] == "command":
+                    spa.handle_command(event[1], event[2], time.monotonic())
+                elif event[0] == "connected":
+                    log.info("MQTT connected")
+                    publish_all(publisher, entities, extra, mqtt_config)
+
+            spa.tick(time.monotonic(), datetime.now())
+            display.update(spa, time.time())
+
+            if time.monotonic() - republished_at >= mqtt_config["republish_sec"]:
+                republished_at = time.monotonic()
+                publish_all(publisher, entities, extra, mqtt_config)
+
+            time.sleep(mqtt_config["sleep"])
+
+    except KeyboardInterrupt:
+        log.info("Spa Controller: script halted")
+        display.message(["Program stopped!", "CTRL-C pressed."])
+
+    except Exception as error:
+        log.exception("Spa Controller: unexpected error")
+        line = error.__traceback__.tb_lineno if error.__traceback__ else "?"
+        text = f"Line{line}:{type(error).__name__}({error})"
+        display.message([text[i : i + 20] for i in range(0, 80, 20)])
+
+    finally:
+        # Leave the outputs in their initial state (heat pump on, rest off)
+        for entity in entities.values():
+            if isinstance(entity, Output):
+                entity.write(entity.initial_on and entity.controllable)
+        # Publish and disconnect while the network loop still runs, so the messages get out
+        client.publish(mqtt_config["statustopic"], mqtt_config["statusoffline"], qos=mqtt_config["qos"])
+        client.disconnect(reasoncodes.ReasonCodes(packettypes.PacketTypes.DISCONNECT, "Disconnect", 4))
+        client.loop_stop()
+
+
+if __name__ == "__main__":
+    main()

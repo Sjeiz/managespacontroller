@@ -9,7 +9,7 @@ The repo lives in `/home/SjeizAdmin/python/managespacontroller/managespacontroll
 
 ## Logs
 The script runs as the systemd service `managespacontroller` and logs to the journal.
-Detailed output (`Message received`, `Gpio[...] -->`, schedules) only appears when `"debug": "true"` is set in `managespacontroller.py.json`.
+Logged: commands from HA (`Message received`), state changes (`State:`), switched outputs (`Output`), refused switch-ons (`Refused`) and faults (`Fault:`).
 
 ```bash
 # Follow live
@@ -18,8 +18,8 @@ journalctl -u managespacontroller.service -f
 # A specific time window
 journalctl -u managespacontroller.service --since "2026-10-04 23:25" --until "2026-10-04 23:35" --no-pager
 
-# Who switched what: MQTT commands from HA (actor "user") and schedule actions
-journalctl -u managespacontroller.service --since "24 hours ago" --no-pager | grep -E "Message received|Starting (ON|OFF) schedule"
+# Who switched what: commands from HA, state changes, refusals and faults
+journalctl -u managespacontroller.service --since "24 hours ago" --no-pager | grep -E "Message received|State:|Refused|Fault:"
 
 # Service starts/stops and crashes
 journalctl -u managespacontroller.service --since "14 days ago" --no-pager | grep -E "Started|Stopped|exited|Traceback|Error"
@@ -42,8 +42,7 @@ The Pi runs a git clone of this repo; deploy by pushing to GitHub and pulling on
    ```
 4. Follow the log (see [Logs](#logs)): `journalctl -u managespacontroller.service -f`
 
-## Design: state machine
-Agreed design, not yet implemented.
+## State machine
 
 ### States
 | State | Meaning |
@@ -55,14 +54,14 @@ Agreed design, not yet implemented.
 ### Transitions
 | From | To | When | Action |
 |---|---|---|---|
-| (start) | Standby | Controller starts | Every output to its `initial_state` |
+| (start) | Standby | Controller starts, after the first sensor readings (max 15 s) | Every output to its `initial_state`; if a problem monitor is active, the fault interlock applies instead |
 | Standby | Session | Session switch on | Session list |
 | Standby | Maintenance | Maintenance time reached | Maintenance list, timers start |
 | Maintenance | Session | Session switch on | Session list, timers cancelled |
 | Session or Maintenance | Standby | Session switch off | All list outputs off |
 | Maintenance | Standby | Circulation timer expired | All list outputs off |
 
-A maintenance time during a session or a running maintenance does nothing.
+A maintenance time during a session or a running maintenance does nothing. When the controller stops, every spa output goes to its `initial_state`.
 
 ### Lists
 | List | Contents, in order |
@@ -76,7 +75,7 @@ On entering Session or Maintenance:
 - outputs in neither list are not touched.
 
 ### Maintenance timers
-- Flush time expired: pumps and blower off.
+- Flush time expired (counted from when the maintenance list is fully on): pumps and blower off.
 - Circulation duration expired: back to Standby.
 
 ### Rules
@@ -104,8 +103,8 @@ Each monitor that compares a value has its own hysteresis, so sensor jitter arou
 
 ### Reporting to HA
 - **Session switch:** on during Session and Maintenance.
-- **`spa_operation`:** sensor with the values `Standby`, `Session`, `Maintenance`, `Error`. It replaces the current binary sensor: after deploying, remove the orphaned `binary_sensor.spa_controller_spa_operation` and point the card in the Jacuzzi dashboard to `sensor.spa_controller_spa_operation`.
-- Outputs, sensors, water level and monitors: as now.
+- **`spa_operation`:** sensor with the values `Standby`, `Session`, `Maintenance`, `Error`. The controller removes the old binary sensor from HA itself (`obsolete_discovery_topics`); after deploying, point the card in the Jacuzzi dashboard to `sensor.spa_controller_spa_operation`.
+- Outputs, sensors, water level and monitors: each its own entity.
 
 ### Water level sensor
 The sensor only gets power while measuring, to limit electrolysis on the electrodes:
@@ -122,18 +121,18 @@ Between measurements the last reading is kept. The first measurement runs at sta
 - All of them put their results in one queue. Only the main loop reads the queue, touches the Spa and switches outputs; the one exception is the water level sensor, which switches its own power output from its thread (no other code uses that pin).
 
 ### Config
-- Per output: pin, on/off level, `initial_state`, optional `conflict` and `requires`, HA fields (`unique_id`, topics).
+- Per output: pin, on/off level, `initial_state`, optional `conflict` and `requires`, HA fields (`unique_id`, topics). Outputs with a `command_topic` are spa outputs; outputs without one (buzzer, water level power) are internal.
 - Per sensor (temperature and water level): measuring interval (start: 10 s).
-- Water level sensor: power output (GPIO 10), settle time (start: 0.1 s).
+- Water level sensor: `power` (output `spa_water_level_power`, GPIO 10), settle time (start: 0.1 s).
 - Per monitor: limit and, for value checks, hysteresis (start: 0.5 °C).
-- Section `spa`: session list, maintenance list, stagger delay, maintenance times (list of clock times, e.g. `["06:00", "18:00"]`), flush time, circulation duration.
-- Removed: `actions_on`, `actions_off`, `schedule_on_secs`, `schedule_off_secs`.
+- Section `spa`: Session switch and `spa_operation` sensor (HA fields), circulation output, session list, maintenance list (lists of steps; outputs in one step switch on together), stagger delay, maintenance times (list of clock times, e.g. `["06:00", "18:00"]`), flush time, circulation duration.
+- `mqtt.obsolete_discovery_topics`: discovery topics that are cleared on connect, so HA removes those entities.
 
 ### Code structure
 | Module | Contents |
 |---|---|
-| `managespacontroller.py` | `main()`: read config, build objects, main loop (service entry point, unchanged) |
-| `entities.py` | Base class (name, `unique_id`, topics, publish, discovery), Output, Input, WaterLevelSensor (Input with power output), TemperatureSensor, TimestampSensor, Monitor, SessionSwitch |
+| `managespacontroller.py` | `main()`: read config, build objects, main loop (service entry point). MQTT connects asynchronously and keeps retrying, so a broker that is down does not stop the controller. |
+| `entities.py` | Publisher (MQTT states and discovery), base class Entity (name, `unique_id`, topics, discovery payload), Output, Input, WaterLevelSensor (Input with power output), TemperatureSensor, TimestampSensor, Monitor, SessionSwitch, OperationSensor |
 | `spa.py` | The state machine (state, transitions, lists, timers, rules) and the fault interlock; owns all entities; all commands go through it |
 | `display.py` | LCD and buzzer; gets its information from the Spa |
 
@@ -145,8 +144,8 @@ Between measurements the last reading is kept. The first measurement runs at sta
 
 ## Open issues
 1. **Water level sensor override (temporary).** The sensor contacts are oxidized and report a false low-water problem, so `spa_water_level` in `managespacontroller.py.json` is inverted (`gpio_on: 0`, `gpio_off: 1`) and named `Spa Water Level (OVERRIDE)`. Low-water protection is effectively disabled. After repairing the sensor (replace bolts with A4/316 stainless, all same metal), swap `gpio_on`/`gpio_off` back and remove `(OVERRIDE)` from the name. Once repaired, the inverted config trips a water problem, so it can't go unnoticed.
-2. **Electrolysis on the water level electrodes.** The sensor runs on DC, which corrodes the anode. Solved in the design by powering it only while measuring (see [Water level sensor](#water-level-sensor)). Still open: whether the module works on 3V3 and within the GPIO current limit; otherwise power it through a relay.
-3. **Pumps switch on when HA reboots while the heat pump is on.** Not visible in HA history. Unverified hypothesis: the MQTT broker (on the HA host) is down, `client.connect()` fails outside the `try` block, and systemd restarts the script every 5 s; before commit `e48c2f1` each start drove the active-low relays on. Start by checking the journal around an HA reboot:
+2. **Electrolysis on the water level electrodes.** The sensor runs on DC, which corrodes the anode; it is now only powered while measuring (see [Water level sensor](#water-level-sensor)). Still open: wire the sensor power to GPIO 10, after checking that the module works on 3V3 and within the GPIO current limit; otherwise power it through a relay (adjust `gpio_on`/`gpio_off` of `spa_water_level_power`).
+3. **Pumps switched on when HA rebooted while the heat pump was on.** Not visible in HA history. Unverified hypothesis: the script crashed while the MQTT broker (on the HA host) was down and systemd restarted it every 5 s. The controller now keeps running without a broker; check at the next HA reboot that nothing switches:
    ```bash
    journalctl -u managespacontroller.service --since "14 days ago" --no-pager | grep -E "Started|Stopped|exited|Traceback|Error|refused|failed" | tail -60
    ```
