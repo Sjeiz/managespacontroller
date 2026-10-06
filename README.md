@@ -77,8 +77,8 @@ A maintenance time during a session or a running maintenance does nothing. When 
 ### Lists
 | List | Contents, in order |
 |---|---|
-| **Session** | Lights and circulation, then pump 1, 2, 3, 4 |
-| **Maintenance** | Circulation, then pump 1, 2, 3, 4, blower |
+| **Session** | Lights and circulation, then pump 1, 2, 3 |
+| **Maintenance** | Circulation, then pump 1, 2, 3, blower |
 
 On entering Session or Maintenance:
 - outputs in the list that are off are switched on; motors are staggered by the configured delay (16 A breaker inrush);
