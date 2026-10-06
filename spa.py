@@ -49,12 +49,22 @@ class Spa:
         self._last_maintenance_slot = None
 
     def _validate(self):
-        names = {uid for step in self.session_list + self.maintenance_list for uid in step}
-        names.add(self.circulation)
+        # Outputs moved to the config's "disabled" section are skipped in the lists
+        listed = {uid for step in self.session_list + self.maintenance_list for uid in step}
+        skipped = sorted(uid for uid in listed if uid not in self.outputs)
+        if skipped:
+            log.warning("Spa list skips unknown outputs: %s", skipped)
+            self.session_list = self._known_steps(self.session_list)
+            self.maintenance_list = self._known_steps(self.maintenance_list)
+        names = {self.circulation}
         names.update(monitor.force_on for monitor in self.monitors if monitor.force_on)
         unknown = sorted(name for name in names if name not in self.outputs)
         if unknown:
             raise ValueError(f"Spa config refers to unknown outputs: {unknown}")
+
+    def _known_steps(self, steps):
+        known = [[uid for uid in step if uid in self.outputs] for step in steps]
+        return [step for step in known if step]
 
     # ---- lists ---------------------------------------------------------------
 

@@ -136,6 +136,7 @@ Between measurements the last reading is kept. The first measurement runs at sta
 - All of them put their results in one queue. Only the main loop reads the queue, touches the Spa and switches outputs; the one exception is the water level sensor, which switches its own power output from its thread (no other code uses that pin).
 
 ### Config
+- Section `disabled`: entity blocks moved here are not read (not set up, not announced to HA); outputs listed in the session/maintenance lists are skipped with a log warning. Move a block back to re-enable it. Currently: `spa_pump4` (not in use).
 - Per output: pin, on/off level, `initial_state`, optional `conflict` and `requires`, HA fields (`unique_id`, topics). Outputs with a `command_topic` are spa outputs; outputs without one (buzzer, water level power) are internal.
 - Per sensor (temperature and water level): measuring interval (start: 10 s).
 - Water level sensor: `power` (output `spa_water_level_power`, GPIO 22), settle time (start: 0.1 s).
