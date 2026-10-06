@@ -307,9 +307,6 @@
 			],
 			[
 				"spa_pump3"
-			],
-			[
-				"spa_pump4"
 			]
 		],
 		"maintenance_list": [
@@ -324,9 +321,6 @@
 			],
 			[
 				"spa_pump3"
-			],
-			[
-				"spa_pump4"
 			],
 			[
 				"spa_blower"
