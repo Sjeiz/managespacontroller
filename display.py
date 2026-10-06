@@ -1,24 +1,78 @@
-"""LCD and buzzer. Gets its information from the Spa; runs in the main loop."""
+"""LCD and buzzer. Gets its information from the Spa; runs in the main loop.
+
+The LCD is optional: if it is missing or fails, the controller keeps running
+without it and retries the connection periodically. The buzzer is a GPIO output
+and does not depend on the LCD.
+"""
 
 import logging
+import time
 
 from spa import STANDBY
 
 log = logging.getLogger(__name__)
 
+RECONNECT_SECS = 60
+
 
 class Display:
-    def __init__(self, lcd, buzzer, temperature_sensors, columns=20, lines=4):
-        self._lcd = lcd
+    def __init__(self, lcd_factory, buzzer, temperature_sensors, columns=20, lines=4):
+        """lcd_factory: callable that creates and initialises the LCD (may raise)."""
+        self._lcd_factory = lcd_factory
         self._buzzer = buzzer
         self._temperature_sensors = temperature_sensors[: lines - 1]
         self._columns = columns
-        self._lines = [None] * lines  # what is currently on the LCD
-        self._visible = True
+        self._line_count = lines
+        self._lcd = None
+        self._reconnect_at = 0.0
+        self._connect()
 
     def update(self, spa, now):
         """now: wall clock seconds, used for the buzzer pulse."""
         self._update_buzzer(spa.fault, now)
+        if self._lcd is None:
+            if time.monotonic() < self._reconnect_at:
+                return
+            self._connect()
+            if self._lcd is None:
+                return
+        try:
+            self._render(spa, now)
+        except Exception as error:
+            self._lost(error)
+
+    def message(self, lines):
+        """Show a fixed message, e.g. when the controller stops."""
+        if self._lcd is None:
+            return
+        try:
+            self._show()
+            for line in range(self._line_count):
+                self._print(line, lines[line] if line < len(lines) else "")
+        except Exception as error:
+            self._lost(error)
+
+    def _connect(self):
+        try:
+            self._lcd = self._lcd_factory()
+        except Exception as error:
+            if self._reconnect_at == 0.0:
+                log.warning("Display not available (%s); retrying every %d s", error, RECONNECT_SECS)
+            self._lcd = None
+            self._reconnect_at = time.monotonic() + RECONNECT_SECS
+            return
+        if self._reconnect_at != 0.0:
+            log.info("Display connected")
+        self._reconnect_at = 0.0
+        self._lines = [None] * self._line_count  # what is currently on the LCD
+        self._visible = True
+
+    def _lost(self, error):
+        log.warning("Display lost (%s); retrying every %d s", error, RECONNECT_SECS)
+        self._lcd = None
+        self._reconnect_at = time.monotonic() + RECONNECT_SECS
+
+    def _render(self, spa, now):
         if spa.state == STANDBY and not spa.fault:
             self._hide()
             return
@@ -33,12 +87,6 @@ class Display:
         for line, sensor in enumerate(self._temperature_sensors, start=1):
             value = "-" if sensor.value is None else str(sensor.value)
             self._print_justified(line, sensor.name + ":", value)
-
-    def message(self, lines):
-        """Show a fixed message, e.g. when the controller stops."""
-        self._show()
-        for line in range(len(self._lines)):
-            self._print(line, lines[line] if line < len(lines) else "")
 
     def _update_buzzer(self, fault, now):
         # Pulse 1 s on, 1 s off; never continuously on

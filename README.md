@@ -149,7 +149,7 @@ Between measurements the last reading is kept. The first measurement runs at sta
 | `managespacontroller.py` | `main()`: read config, build objects, main loop (service entry point). MQTT connects asynchronously and keeps retrying, so a broker that is down does not stop the controller. |
 | `entities.py` | Publisher (MQTT states and discovery), base class Entity (name, `unique_id`, topics, discovery payload), Output, Input, WaterLevelSensor (Input with power output), TemperatureSensor, TimestampSensor, Monitor, SessionSwitch, OperationSensor |
 | `spa.py` | The state machine (state, transitions, lists, timers, rules), the fault interlock and frost protection; owns all entities; all commands go through it |
-| `display.py` | LCD and buzzer; gets its information from the Spa |
+| `display.py` | LCD and buzzer; gets its information from the Spa. The LCD is optional: if it is missing at startup or fails later, the controller keeps running, logs it once and retries every 60 s. The buzzer does not depend on the LCD. |
 
 - An Output switches the pin and remembers its state in one place; outputs are never read back. Only inputs and sensors are read.
 - The fault interlock and frost protection are checked at that single place where outputs are switched.

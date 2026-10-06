@@ -164,9 +164,12 @@ def main():
     operation_sensor = OperationSensor("spa_operation", spa_config["operation_sensor"])
     spa = Spa(spa_config, entities, session_switch, operation_sensor, publisher)
 
-    lcd = liquidcrystal_i2c.LiquidCrystal_I2C(0x27, 1, numlines=4)
     temperature_sensors = [e for e in entities.values() if isinstance(e, TemperatureSensor)]
-    display = Display(lcd, entities["spa_buzzer"], temperature_sensors)
+    display = Display(
+        lambda: liquidcrystal_i2c.LiquidCrystal_I2C(0x27, 1, numlines=4),
+        entities["spa_buzzer"],
+        temperature_sensors,
+    )
     display.message(["Program started!"])
 
     # Connect asynchronously: paho keeps retrying, so a broker that is down doesn't stop the spa
