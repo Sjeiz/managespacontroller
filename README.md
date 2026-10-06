@@ -157,6 +157,11 @@ Between measurements the last reading is kept. The first measurement runs at sta
 - Every class declares its attributes explicitly with defaults; config values are mapped onto them (no `setattr` from config, no `hasattr` checks).
 - No global variables.
 
+## Home Assistant
+- **Entities** come from MQTT discovery (device "Spa Controller"). Since HA 2026.06 a new entity gets the area as prefix (`garden_...`); rename it once in HA to `<domain>.spa_controller_<name>`. The name stays after restarts because the `unique_id` does not change.
+- **Removing an entity** (after taking it out of the config): publish an empty retained message to its discovery topic, e.g. action `mqtt.publish` with `topic: homeassistant/switch/spa-controller/spa_pump4/config`, `payload: ""`, `retain: true`. A new entity shows `unknown` for up to 60 s, until the next republish.
+- **Dashboard** "Jacuzzi" (`dashboard-jacuzzi`) is managed as code in the separate repo `homeassistant-dashboards` with hadsync (`hadsync validate/push/pull`). The Spa Operation row uses `custom:template-entity-row` for the state-dependent icon color.
+
 ## Tests
 Scenario tests without hardware: `python tests/test_spa.py`. Run them before every commit. What they cover, how the stubs work and how to add a test: [tests/README.md](tests/README.md).
 
