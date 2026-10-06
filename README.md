@@ -103,7 +103,7 @@ Each monitor that compares a value has its own hysteresis, so sensor jitter arou
 
 ### Reporting to HA
 - **Session switch:** on during Session and Maintenance.
-- **`spa_operation`:** sensor with the values `Standby`, `Session`, `Maintenance`, `Error`. The controller removes the old binary sensor from HA itself (`obsolete_discovery_topics`); after deploying, point the card in the Jacuzzi dashboard to `sensor.spa_controller_spa_operation`.
+- **`spa_operation`:** sensor with the values `Standby`, `Session`, `Maintenance`, `Error`. The controller removes the old binary sensor from HA itself (`obsolete_discovery_topics`); after deploying, point the card in the Jacuzzi dashboard to `sensor.garden_spa_controller_spa_operation`.
 - Outputs, sensors, water level and monitors: each its own entity.
 
 ### Water level sensor
