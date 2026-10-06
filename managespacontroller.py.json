@@ -326,7 +326,7 @@
 			"config_topic": "homeassistant/binary_sensor/spa-controller/spa_status_temp/config",
 			"state_topic": "spa-controller/spa_status/spa_status_temp",
 			"monitor": {
-				"check_01": "value_greater, spa_temp_1, 45"
+				"check_01": "value_greater, spa_temp_1, 40"
 			},
 			"payload_on": "problem",
 			"payload_off": "ok",
