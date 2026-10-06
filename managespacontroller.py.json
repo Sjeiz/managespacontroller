@@ -200,7 +200,7 @@
 		"spa_water_level_power": {
 			"name": "Spa Water Level Power",
 			"direction": "output",
-			"pin": 10,
+			"pin": 22,
 			"initial_state": "off",
 			"gpio_on": 1,
 			"gpio_off": 0

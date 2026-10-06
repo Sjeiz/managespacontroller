@@ -123,7 +123,7 @@ Between measurements the last reading is kept. The first measurement runs at sta
 ### Config
 - Per output: pin, on/off level, `initial_state`, optional `conflict` and `requires`, HA fields (`unique_id`, topics). Outputs with a `command_topic` are spa outputs; outputs without one (buzzer, water level power) are internal.
 - Per sensor (temperature and water level): measuring interval (start: 10 s).
-- Water level sensor: `power` (output `spa_water_level_power`, GPIO 10), settle time (start: 0.1 s).
+- Water level sensor: `power` (output `spa_water_level_power`, GPIO 22), settle time (start: 0.1 s).
 - Per monitor: limit and, for value checks, hysteresis (start: 0.5 °C).
 - Section `spa`: Session switch and `spa_operation` sensor (HA fields), circulation output, session list, maintenance list (lists of steps; outputs in one step switch on together), stagger delay, maintenance times (list of clock times, e.g. `["06:00", "18:00"]`), flush time, circulation duration.
 - `mqtt.obsolete_discovery_topics`: discovery topics that are cleared on connect, so HA removes those entities.
@@ -144,7 +144,7 @@ Between measurements the last reading is kept. The first measurement runs at sta
 
 ## Open issues
 1. **Water level sensor override (temporary).** The sensor contacts are oxidized and report a false low-water problem, so `spa_water_level` in `managespacontroller.py.json` is inverted (`gpio_on: 0`, `gpio_off: 1`) and named `Spa Water Level (OVERRIDE)`. Low-water protection is effectively disabled. After repairing the sensor (replace bolts with A4/316 stainless, all same metal), swap `gpio_on`/`gpio_off` back and remove `(OVERRIDE)` from the name. Once repaired, the inverted config trips a water problem, so it can't go unnoticed.
-2. **Electrolysis on the water level electrodes.** The sensor runs on DC, which corrodes the anode; it is now only powered while measuring (see [Water level sensor](#water-level-sensor)). Still open: wire the sensor power to GPIO 10, after checking that the module works on 3V3 and within the GPIO current limit; otherwise power it through a relay (adjust `gpio_on`/`gpio_off` of `spa_water_level_power`).
+2. **Electrolysis on the water level electrodes.** The sensor runs on DC, which corrodes the anode; it is now only powered while measuring (see [Water level sensor](#water-level-sensor)). Still open: wire the sensor power to GPIO 22, after checking that the module works on 3V3 and within the GPIO current limit; otherwise power it through a relay (adjust `gpio_on`/`gpio_off` of `spa_water_level_power`).
 3. **Pumps switched on when HA rebooted while the heat pump was on.** Not visible in HA history. Unverified hypothesis: the script crashed while the MQTT broker (on the HA host) was down and systemd restarted it every 5 s. The controller now keeps running without a broker; check at the next HA reboot that nothing switches:
    ```bash
    journalctl -u managespacontroller.service --since "14 days ago" --no-pager | grep -E "Started|Stopped|exited|Traceback|Error|refused|failed" | tail -60
