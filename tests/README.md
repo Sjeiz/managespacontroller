@@ -52,7 +52,7 @@ The checks form **one continuous scenario**: each check starts from the state th
 
 | Area | Checks |
 |---|---|
-| **Startup** | Only the heat pump is on (`initial_state`); pin levels for the relay board and for the one channel on its break contact; buzzer and water level power are internal outputs. |
+| **Startup** | Only the heat pump is on (`initial_state`); pin levels for the relay board and for the heat pump channel on its break contact; buzzer and water level power are internal outputs. |
 | **Session** | Lights and circulation switch on together; pumps follow one by one after the stagger delay; Session switch and `spa_operation` follow the state; a maintenance time during a session does nothing; manual control during a session; Session switch off returns to Standby. |
 | **Manual reporting** | `Manual` only when an output that is off by default is on; switching the heat pump off stays `Standby`; manual control in Standby switches only that output. |
 | **Maintenance** | Starts at a configured clock time with circulation and without lights; pumps and blower flush; after the flush time only circulation (and the heat pump) remain; the same minute does not retrigger; ends after the circulation duration; the Session switch during maintenance turns it into a session (blower off, lights on, timers cancelled). |
@@ -76,8 +76,8 @@ The tests read `managespacontroller.py.json` and assume its current values. A ch
 - temperature monitor limit 40 °C with hysteresis 0.5 °C;
 - frost monitor below 4 °C on `spa_temp_3` with `force_on: spa_heatpump` and `unknown_active` switched off;
 - monitor order water, temperature, frost with warnings `WaterLow`, `TempHigh`, `Frost` (Spa Status priority);
-- water level input on pin 23 with `gpio_on: 1`, power output on pin 26 (on = high, because that channel sits on its break contact), settle time 1 s and a measuring interval of 300 s;
-- heat pump on pin 17 and pump 1 on pin 22, both active low.
+- water level input on pin 23 with `gpio_on: 1`, power output on pin 26 (active low), settle time 1 s and a measuring interval of 300 s;
+- heat pump on pin 17 (on = high, because its channel drives the power relay through its break contact), pump 1 on pin 22 (active low).
 
 ## What is not covered
 

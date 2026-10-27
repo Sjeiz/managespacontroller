@@ -34,8 +34,8 @@
 			"state_topic": "spa-controller/spa_heatpump",
 			"payload_on": "on",
 			"payload_off": "off",
-			"gpio_on": 0,
-			"gpio_off": 1
+			"gpio_on": 1,
+			"gpio_off": 0
 		},
 		"spa_circulation": {
 			"name": "Spa Circulation Pump",
@@ -148,8 +148,8 @@
 			"direction": "output",
 			"pin": 26,
 			"initial_state": "off",
-			"gpio_on": 1,
-			"gpio_off": 0
+			"gpio_on": 0,
+			"gpio_off": 1
 		},
 		"spa_buzzer": {
 			"name": "Spa Buzzer",
