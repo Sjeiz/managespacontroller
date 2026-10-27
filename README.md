@@ -109,7 +109,7 @@ Each monitor that compares a value has its own hysteresis, so sensor jitter arou
 
 ### Frost protection
 A monitor with `force_on` keeps that output on while it is active; switching it off is refused. With `unknown_active` the monitor also counts as active when its value is unknown (sensor failure). The fault interlock takes precedence.
-While a `force_on` monitor is active the LCD stays readable in Standby and shows its `warning` in capitals, but without backlight: the condition can last for weeks.
+While a `force_on` monitor is active its `warning` is shown in capitals on the LCD, in front of the active outputs. The LCD itself follows the usual rule: off in Standby.
 
 ### Reporting to HA
 - **Session switch:** on during Session and Maintenance.

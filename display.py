@@ -66,7 +66,6 @@ class Display:
         self._reconnect_at = 0.0
         self._lines = [None] * self._line_count  # what is currently on the LCD
         self._visible = True
-        self._backlit = True
 
     def _lost(self, error):
         log.warning("Display lost (%s); retrying every %d s", error, RECONNECT_SECS)
@@ -74,14 +73,12 @@ class Display:
         self._reconnect_at = time.monotonic() + RECONNECT_SECS
 
     def _render(self, spa, now):
-        # Frost protection keeps the display awake in Standby, so the warning is readable.
-        # It stays unlit there: frost can last for weeks and nothing else is happening.
-        forced = spa.forced_warnings()
-        quiet = spa.state == STANDBY and not spa.fault
-        if quiet and not forced:
+        if spa.state == STANDBY and not spa.fault:
             self._hide()
             return
-        self._show(backlit=not quiet)
+        self._show()
+        # A force_on monitor (frost) is reported in front of the active outputs
+        forced = spa.forced_warnings()
         if spa.fault:
             status = "WARNING: " + " ".join(spa.warnings())
         else:
@@ -110,17 +107,14 @@ class Display:
             self._lcd.printline(line, text)
             self._lines[line] = text
 
-    def _show(self, backlit=True):
+    def _show(self):
         if not self._visible:
+            self._lcd.backlight()
             self._lcd.display()
             self._visible = True
-        if backlit != self._backlit:
-            self._lcd.backlight() if backlit else self._lcd.noBacklight()
-            self._backlit = backlit
 
     def _hide(self):
         if self._visible:
             self._lcd.noDisplay()
             self._lcd.noBacklight()
             self._visible = False
-            self._backlit = False
