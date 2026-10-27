@@ -399,3 +399,4 @@ FodyWeavers.xsd
 
 # Local secrets (MQTT credentials), never in git
 managespacontroller.secrets.json
+backup/

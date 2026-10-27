@@ -305,7 +305,7 @@
 		],
 		"flush_secs": 30,
 		"circulation_secs": 3600,
-		"status_log_secs": 300
+		"status_log_secs": 60
 	},
 	"web": {
 		"port": 80
