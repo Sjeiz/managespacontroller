@@ -99,8 +99,6 @@ A blocking layer above the state machine; the state machine itself has no fault 
 2. **While active:** every switch-on is refused, whether from the Session switch, a maintenance time or manual control. Exempt: the buzzer and the water level sensor's power output (otherwise the water level could never be measured again and the fault would never clear).
 3. **Cleared:** every output to its `initial_state`, as at controller start.
 
-The interlock reaches no further than the running controller. The heat pump's channel runs through the break contact, so the heat pump is powered whenever that channel is not driven: a dead Pi in winter does not mean a frozen spa. The reverse holds as well: a Pi that dies while a fault is active starts the heat pump, which drives the circulation pump dry. Covering that needs hardware, a flow switch in series.
-
 Monitors are defined in the config (`monitors`). A monitor with `device_class: problem` triggers the fault interlock; a monitor with `force_on` is a [frost protection](#frost-protection)-type override.
 
 **The order of the blocks under `monitors` in the config is the priority of Spa Status: the first active monitor wins.** To change the priority, move the blocks. A monitor may also check monitors defined above it.
