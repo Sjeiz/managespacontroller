@@ -52,6 +52,7 @@ entities, ts = mc.build_entities(config)
 for e in entities.values():
     if isinstance(e, (mc.Output, mc.Input)):
         e.setup()
+pins_after_setup = dict(GPIO.pins)  # no relay may change level between setup and spa.start()
 pub = FakePublisher()
 sc = config["spa"]
 monitors = [e for e in entities.values() if isinstance(e, Monitor)]
@@ -90,6 +91,8 @@ check("monitors are not separate HA entities", all(m.config_topic is None and m.
 check("start: heat pump pin high (gpio_on=1, break contact)", GPIO.pins[17] == 1)
 check("start: pump1 pin at off-level (active low = 1)", GPIO.pins[22] == 1)
 check("start: level power pin at off-level (active low = 1)", GPIO.pins[26] == 1)
+check("setup: heat pump pin already high, so it does not drop out before start",
+      pins_after_setup[17] == 1 and pins_after_setup[22] == 1 and pins_after_setup[26] == 1)
 check("start: buzzer and level power are not spa outputs", "spa_buzzer" not in O and "spa_water_level_power" not in O)
 
 t = 1000.0

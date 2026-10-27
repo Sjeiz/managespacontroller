@@ -44,7 +44,7 @@ The checks form **one continuous scenario**: each check starts from the state th
 
 | Stub | Location | Behaviour |
 |---|---|---|
-| `RPi.GPIO` | `tests/stubs/RPi/GPIO.py` | Records outputs in `GPIO.pins` (pin → level). Inputs are read from `GPIO.inputs` (pin → level, default `1`). A test sets e.g. `GPIO.inputs[12] = 0` to simulate low water. |
+| `RPi.GPIO` | `tests/stubs/RPi/GPIO.py` | Records outputs in `GPIO.pins` (pin → level). Inputs are read from `GPIO.inputs` (pin → level, default `1`). A test sets e.g. `GPIO.inputs[23] = 1` to simulate low water. |
 | `paho.mqtt` | Created in `test_spa.py` | Empty modules, only so the controller modules can be imported. |
 | `smbus` | Created in `test_spa.py` | Empty module, only so `liquidcrystal_i2c` can be imported. |
 
@@ -52,7 +52,7 @@ The checks form **one continuous scenario**: each check starts from the state th
 
 | Area | Checks |
 |---|---|
-| **Startup** | Only the heat pump is on (`initial_state`); pin levels for the relay board and for the heat pump channel on its break contact; buzzer and water level power are internal outputs. |
+| **Startup** | Only the heat pump is on (`initial_state`); the pin levels right after `setup()` already match `initial_state`, so no output changes level before the controller starts; pin levels for the relay board and for the heat pump channel on its break contact; buzzer and water level power are internal outputs. |
 | **Session** | Lights and circulation switch on together; pumps follow one by one after the stagger delay; Session switch and `spa_operation` follow the state; a maintenance time during a session does nothing; manual control during a session; Session switch off returns to Standby. |
 | **Manual reporting** | `Manual` only when an output that is off by default is on; switching the heat pump off stays `Standby`; manual control in Standby switches only that output. |
 | **Maintenance** | Starts at a configured clock time with circulation and without lights; pumps and blower flush; after the flush time only circulation (and the heat pump) remain; the same minute does not retrigger; ends after the circulation duration; the Session switch during maintenance turns it into a session (blower off, lights on, timers cancelled). |

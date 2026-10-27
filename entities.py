@@ -117,9 +117,9 @@ class Output(BinaryEntity):
         return self.command_topic is not None
 
     def setup(self):
-        # Drive the off-level before switching to output, so active-low relays don't pulse on at startup
-        GPIO.setup(self.pin, GPIO.OUT, initial=self.gpio_off)
-        self.is_on = False
+        # Drive the initial level before switching to output, so no relay pulses at startup
+        GPIO.setup(self.pin, GPIO.OUT, initial=self.gpio_on if self.initial_on else self.gpio_off)
+        self.is_on = self.initial_on
 
     def write(self, on):
         GPIO.output(self.pin, self.gpio_on if on else self.gpio_off)

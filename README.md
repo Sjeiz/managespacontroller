@@ -74,6 +74,8 @@ The Pi runs a git clone of this repo; deploy by pushing to GitHub and pulling on
 
 A maintenance time during a session or a running maintenance does nothing. When the controller stops, every spa output goes to its `initial_state`.
 
+The pins are claimed before the first readings: every output is set up at the level of its own `initial_state`, so nothing changes level during those first seconds.
+
 ### Lists
 The config defines a session list and a maintenance list (`spa.session_list`, `spa.maintenance_list`): ordered steps, where the outputs in one step switch on together.
 
