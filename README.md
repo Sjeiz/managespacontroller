@@ -53,10 +53,6 @@ The Pi runs a git clone of this repo; deploy by pushing to GitHub and pulling on
    ```
 4. Follow the log (see [Logs](#logs)): `journalctl -u managespacontroller.service -f`
 
-## Hardware
-- **The relay channels are wired in reverse order and corrected in software.** The load meant for the first channel sits on the last one and so on, break contact included, so every output in the config carries the pin of its mirrored channel.
-- **The heat pump is powered whenever the controller does not hold it off.** Its channel runs through the break contact, so the heat pump runs as soon as that channel is not driven. That is deliberate: a dead Pi in winter does not mean a frozen spa. It cuts both ways: if the Pi dies while the fault interlock is active (low water, or an empty spa), the heat pump starts anyway and drives the circulation pump dry. Software cannot cover that; it needs hardware (a flow switch in series).
-
 ## State machine
 
 ### States
@@ -102,6 +98,8 @@ A blocking layer above the state machine; the state machine itself has no fault 
 1. **A problem monitor becomes active:** the state machine goes to Standby (the same transition as Session switch off) and every spa output goes off, also outputs whose `initial_state` is on (the heat pump drives the circulation pump, which would run dry without water). The buzzer pulses 1 s on, 1 s off (never continuously on).
 2. **While active:** every switch-on is refused, whether from the Session switch, a maintenance time or manual control. Exempt: the buzzer and the water level sensor's power output (otherwise the water level could never be measured again and the fault would never clear).
 3. **Cleared:** every output to its `initial_state`, as at controller start.
+
+The interlock reaches no further than the running controller. The heat pump's channel runs through the break contact, so the heat pump is powered whenever that channel is not driven: a dead Pi in winter does not mean a frozen spa. The reverse holds as well: a Pi that dies while a fault is active starts the heat pump, which drives the circulation pump dry. Covering that needs hardware, a flow switch in series.
 
 Monitors are defined in the config (`monitors`). A monitor with `device_class: problem` triggers the fault interlock; a monitor with `force_on` is a [frost protection](#frost-protection)-type override.
 
@@ -185,5 +183,5 @@ Between measurements the last reading is kept. The first measurement runs at sta
 Scenario tests without hardware: `python tests/test_spa.py`. Run them before every commit. What they cover, how the stubs work and how to add a test: [tests/README.md](tests/README.md).
 
 ## Open issues
-1. **Water level sensor bridged in hardware (temporary).** The electrodes are oxidized and have to be replaced by titanium bolts with a round head, both of the same metal. Until then the contact is bridged physically, so the input always reads "water present" and low-water protection is inactive. The config carries the real polarity, so removing the bridge restores the protection without a config change. The bypass sits in the wiring, where it is visible, instead of in an inverted config.
+1. **Water level sensor bridged in hardware (temporary).** The electrodes are oxidized and have to be replaced by titanium bolts with a round head, both of the same metal. Until then the contact is bridged physically, so the input always reads "water present" and low-water protection is inactive. The config carries the real polarity, so removing the bridge restores the protection without a config change.
 2. **Rebuild and SD card backup.** Not decided. Idea: an install script in this repo (enable 1-wire and I2C, install packages, install and enable the service), so a rebuild is: flash Raspberry Pi OS, clone, run the script, create the secrets file. The controller is screwed shut in the spa, so an image backup has to run over the network while the Pi is up: `image-backup` (RonR's image-utils) to a share, or a one-off `dd` over SSH. Open question: is there a network share the Pi can write to?
