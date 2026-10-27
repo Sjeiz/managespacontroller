@@ -90,8 +90,6 @@ On entering Session or Maintenance:
 | Rule | Config | Behaviour |
 |---|---|---|
 | **Manual control** | - | A command from HA switches only that output |
-| **Mutual exclusion** | `conflict` | Switching one on switches the other off; switching one off returns the other to its `initial_state` |
-| **Requirement** | `requires` | An output may only be on while the required output is on; when that goes off, it goes off too |
 
 ### Fault interlock
 A blocking layer above the state machine; the state machine itself has no fault handling.
@@ -106,7 +104,7 @@ Monitors are defined in the config (`monitors`). A monitor with `device_class: p
 Each monitor that compares a value has its own hysteresis, so sensor jitter around the limit does not toggle the fault.
 
 ### Frost protection
-A monitor with `force_on` keeps that output on while it is active; switching it off (or switching on its `conflict` partner) is refused. With `unknown_active` the monitor also counts as active when its value is unknown (sensor failure). The fault interlock takes precedence.
+A monitor with `force_on` keeps that output on while it is active; switching it off is refused. With `unknown_active` the monitor also counts as active when its value is unknown (sensor failure). The fault interlock takes precedence.
 
 ### Reporting to HA
 - **Session switch:** on during Session and Maintenance.
@@ -149,7 +147,7 @@ Between measurements the last reading is kept. The first measurement runs at sta
 
 ### Config
 - Section `disabled`: entity blocks moved here are not read (not set up, not announced to HA); outputs still listed in the session/maintenance lists are skipped with a log warning. Move a block back to re-enable it.
-- Per output: pin, on/off level, `initial_state`, optional `conflict` and `requires`, HA fields (`unique_id`, topics). Outputs with a `command_topic` are spa outputs; outputs without one (buzzer, water level power) are internal.
+- Per output: pin, on/off level, `initial_state`, HA fields (`unique_id`, topics). Outputs with a `command_topic` are spa outputs; outputs without one (buzzer, water level power) are internal.
 - Per sensor (temperature and water level): measuring interval.
 - Water level sensor: `power` (the output that powers it) and settle time.
 - Per monitor (order = Spa Status priority): `warning` (Spa Status value), limit and, for value checks, hysteresis; optional `force_on` (output kept on while active) and `unknown_active` (an unknown value counts as true).
@@ -180,10 +178,11 @@ Between measurements the last reading is kept. The first measurement runs at sta
 Scenario tests without hardware: `python tests/test_spa.py`. Run them before every commit. What they cover, how the stubs work and how to add a test: [tests/README.md](tests/README.md).
 
 ## Open issues
-1. **Water level sensor override (temporary).** The sensor contacts are oxidized and report a false low-water problem, so `spa_water_level` in `managespacontroller.py.json` is inverted (`gpio_on: 0`, `gpio_off: 1`) and named `Spa Water Level (OVERRIDE)`. Low-water protection is effectively disabled. After repairing the sensor (replace bolts with A4/316 stainless, all same metal), swap `gpio_on`/`gpio_off` back and remove `(OVERRIDE)` from the name. Once repaired, the inverted config trips a water problem, so it can't go unnoticed.
-2. **Electrolysis on the water level electrodes.** The sensor runs on DC, which corrodes the anode; it is now only powered while measuring (see [Water level sensor](#water-level-sensor)). Still open: wire the sensor power to the pin of `spa_water_level_power`, after checking that the module works on 3V3 and within the GPIO current limit; otherwise power it through a relay (adjust `gpio_on`/`gpio_off` of `spa_water_level_power`).
-3. **Pumps switched on when HA rebooted while the heat pump was on.** Not visible in HA history. Unverified hypothesis: the script crashed while the MQTT broker (on the HA host) was down and systemd restarted it every 5 s. The controller now keeps running without a broker; check at the next HA reboot that nothing switches:
+1. **Water level sensor bridged in hardware (temporary).** The electrodes are oxidized and have to be replaced (bolts in A4/316 stainless, all the same metal). Until then the contact is bridged physically, so the input always reads "water present" and low-water protection is inactive. The config carries the real polarity again, so removing the bridge restores the protection without a config change. The bypass sits in the wiring, where it is visible, instead of in an inverted config.
+2. **Frost protection reduced while the thermometers are disconnected (temporary).** `unknown_active` is off on the frost monitor, so an unknown outside temperature no longer forces the heat pump on. Switch it back on once the DS18B20 sensors are wired, otherwise a failing sensor no longer protects against frost.
+3. **The heat pump runs whenever the controller does not hold it off.** Relay 1 is wired through its break contact, so the heat pump is powered as soon as its channel is not driven. That is deliberate: a dead Pi in winter does not mean a frozen spa. The consequence is the other way round, though: if the Pi dies while the fault interlock is active (low water, or an empty spa), the heat pump starts anyway and drives the circulation pump dry. Nothing in software can cover this; it needs hardware (a flow switch in series) if it has to be covered at all.
+4. **Pumps switched on when HA rebooted while the heat pump was on.** Not visible in HA history. Unverified hypothesis: the script crashed while the MQTT broker (on the HA host) was down and systemd restarted it every 5 s. The controller now keeps running without a broker; check at the next HA reboot that nothing switches:
    ```bash
    journalctl -u managespacontroller.service --since "14 days ago" --no-pager | grep -E "Started|Stopped|exited|Traceback|Error|refused|failed" | tail -60
    ```
-4. **Rebuild and SD card backup.** Not decided. Idea: an install script in this repo (enable 1-wire and I2C, install packages, install and enable the service), so a rebuild is: flash Raspberry Pi OS, clone, run the script, create the secrets file. For an image backup: `image-backup` (RonR's image-utils) to a network share, or a one-off `dd` over SSH. Open question: is there a network share the Pi can write to?
+5. **Rebuild and SD card backup.** Not decided. Idea: an install script in this repo (enable 1-wire and I2C, install packages, install and enable the service), so a rebuild is: flash Raspberry Pi OS, clone, run the script, create the secrets file. For an image backup: `image-backup` (RonR's image-utils) to a network share, or a one-off `dd` over SSH. Open question: is there a network share the Pi can write to?

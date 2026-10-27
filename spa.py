@@ -166,7 +166,7 @@ class Spa:
         self.fault = True
         self._to_standby()
         for uid in self.outputs:
-            self.switch(uid, False, restore_conflict=False)
+            self.switch(uid, False)
 
     def warnings(self):
         return [m.warning for m in self._problem_monitors() if m.is_on and m.warning]
@@ -186,8 +186,8 @@ class Spa:
 
     # ---- switching: the single place where spa outputs are switched ----------
 
-    def switch(self, uid, on, restore_conflict=True):
-        """Switch a spa output, applying the fault interlock, conflict and requires rules.
+    def switch(self, uid, on):
+        """Switch a spa output, applying the fault interlock.
         Returns True if the output ends up in the requested state."""
         output = self.outputs[uid]
         if on:
@@ -195,12 +195,6 @@ class Spa:
                 return True
             if self.fault:
                 return self._refuse(output, "fault active")
-            if output.requires and not self.outputs[output.requires].is_on:
-                return self._refuse(output, f"requires {output.requires}")
-            if output.conflict and self._forced_on(output.conflict):
-                return self._refuse(output, f"{output.conflict} is forced on")
-            if output.conflict and self.outputs[output.conflict].is_on:
-                self.switch(output.conflict, False, restore_conflict=False)
             self._write(output, True)
             return True
 
@@ -209,13 +203,6 @@ class Spa:
         if not self.fault and self._forced_on(uid):
             return self._refuse(output, "forced on", requested=False)
         self._write(output, False)
-        for dependent in self.outputs.values():
-            if dependent.requires == uid and dependent.is_on:
-                self.switch(dependent.unique_id, False)
-        if restore_conflict and output.conflict:
-            partner = self.outputs[output.conflict]
-            if partner.initial_on and not partner.is_on:
-                self.switch(partner.unique_id, True)
         return True
 
     def _write(self, output, on):
@@ -234,7 +221,7 @@ class Spa:
 
     def _apply_initial_states(self):
         for output in self.outputs.values():
-            self.switch(output.unique_id, output.initial_on, restore_conflict=False)
+            self.switch(output.unique_id, output.initial_on)
 
     # ---- state machine -------------------------------------------------------
 

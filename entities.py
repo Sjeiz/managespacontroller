@@ -109,8 +109,6 @@ class Output(BinaryEntity):
         self.gpio_on = int(config.get("gpio_on", 1))
         self.gpio_off = int(config.get("gpio_off", 0))
         self.initial_on = config.get("initial_state", "off") == "on"
-        self.conflict = config.get("conflict")
-        self.requires = config.get("requires")
         self.short_name = config.get("short_name")
 
     @property
@@ -230,6 +228,7 @@ class TemperatureSensor(MeasuringEntity):
         self.scale = float(config.get("scale", 1))
         self.offset = float(config.get("offset", 0))
         self.round_digits = int(config.get("round_digits", 1))
+        self.unreadable = False  # True while the sensor file cannot be read, so it is logged once
 
     @property
     def state(self):
@@ -237,8 +236,18 @@ class TemperatureSensor(MeasuringEntity):
 
     def measure(self):
         for _ in range(self._READ_ATTEMPTS):
-            with open(self.filename, "r") as file:
-                lines = file.readlines()
+            # A missing or unreadable sensor is logged once, not as a traceback every interval
+            try:
+                with open(self.filename, "r") as file:
+                    lines = file.readlines()
+            except OSError as error:
+                if not self.unreadable:
+                    log.warning("Sensor %s cannot be read, retrying quietly: %s", self.unique_id, error)
+                    self.unreadable = True
+                return None
+            if self.unreadable:
+                log.info("Sensor %s can be read again", self.unique_id)
+                self.unreadable = False
             if len(lines) >= 2 and lines[0].strip().endswith("YES"):
                 position = lines[1].find("t=")
                 if position == -1:

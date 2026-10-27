@@ -14,6 +14,7 @@ python tests/test_spa.py
 - Every check prints `PASS <name>` or `FAIL <name>`; a failure also prints the outputs that are on, the state and the fault flag.
 - Log lines of the controller go to stderr, with the prefix `  log:`.
 - The last line is `RESULT: ALL PASSED` or `RESULT: FAILED`. The exit code is `0` when all checks pass and `1` otherwise, so the script can be used in a script or CI step.
+- A run takes about ten seconds. Most of that is the water level sensor: every measurement really waits the configured settle time.
 
 To see only the result and the failures:
 
@@ -51,19 +52,18 @@ The checks form **one continuous scenario**: each check starts from the state th
 
 | Area | Checks |
 |---|---|
-| **Startup** | Only the heat pump is on (`initial_state`); pin levels for active-high and active-low relays; buzzer and water level power are internal outputs; outputs in the `disabled` config section are skipped in the lists. |
+| **Startup** | Only the heat pump is on (`initial_state`); pin levels for the relay board and for the heat pump channel on its break contact; buzzer and water level power are internal outputs. |
 | **Session** | Lights and circulation switch on together; pumps follow one by one after the stagger delay; Session switch and `spa_operation` follow the state; a maintenance time during a session does nothing; manual control during a session; Session switch off returns to Standby. |
-| **Rules** | `requires` (heater refused without circulation); `conflict` (heater on switches the heat pump off, heater off switches it back on); circulation off switches the heater off and the heat pump back on. |
 | **Manual reporting** | `Manual` only when an output that is off by default is on; switching the heat pump off stays `Standby`; manual control in Standby switches only that output. |
 | **Maintenance** | Starts at a configured clock time with circulation and without lights; pumps and blower flush; after the flush time only circulation (and the heat pump) remain; the same minute does not retrigger; ends after the circulation duration; the Session switch during maintenance turns it into a session (blower off, lights on, timers cancelled). |
 | **Fault interlock** | Water temperature above 40 °C: everything off including the heat pump, `Error`; Session switch and manual control refused; hysteresis (still active at 39.8 °C, cleared at 39.4 °C, 40.0 °C does not trip); a maintenance time during a fault does nothing; clearing restores `initial_state`. |
 | **Water level sensor** | The power output is switched on only while measuring and is off afterwards; low water gives a fault with warning `WaterLow`. |
 | **Buzzer and LCD** | The buzzer pulses 1 s on / 1 s off during a fault and is off afterwards; LCD line 0 shows the warning, line 1 the water temperature. |
-| **Frost protection** | Below 4 °C the heat pump is forced on and `Frost` is reported; switching it off and switching the heater on are refused; `Active` (Session) takes display priority over `Frost`; a fault takes precedence (everything off), and clearing it switches the heat pump back on; an unknown outside temperature counts as frost (`unknown_active`); above 4 °C the heat pump can be switched off again; an unknown water temperature does not cause a fault. |
+| **Frost protection** | Below 4 °C the heat pump is forced on and `Frost` is reported; switching it off and switching the heater on are refused; `Active` (Session) takes display priority over `Frost`; a fault takes precedence (everything off), and clearing it switches the heat pump back on; an unknown outside temperature does not count as frost while `unknown_active` is off; above 4 °C the heat pump can be switched off again; an unknown water temperature does not cause a fault. |
 | **Spa Status** | `Normal` at startup with nothing active; options follow the config order of the monitors; monitors are not separate HA entities; `TempHigh`, `WaterLow` and `Frost` when active; with low water and frost together the first monitor in the config (`WaterLow`) wins and the attribute `active` lists both. |
 | **Display failures** | No LCD at startup and during a session does not raise; the buzzer keeps working without an LCD; the LCD reconnects when it becomes available; losing the LCD during operation does not raise and marks it unavailable. |
 | **Spa Response** | `OK` for a successful command; a refused command with its reason; an unknown target is reported; a repeated identical response gets a new `time` attribute. |
-| **Web server** | A real server on a free port with a stand-in for the main loop: page and status served; controls start with the Session switch and contain no internal or disabled outputs; a command switches an output; a refused command returns its reason; the Session switch starts a session; invalid commands give 400, unknown paths 404. |
+| **Web server** | A real server on a free port with a stand-in for the main loop: page and status served; controls start with the Session switch and contain no internal outputs; a command switches an output; a refused command returns its reason; the Session switch starts a session; invalid commands give 400, unknown paths 404. |
 | **Secrets file** | A missing `managespacontroller.secrets.json` stops the controller with a clear message; a present file is merged into the MQTT config. The test uses a temporary file and never touches a real secrets file. |
 
 ## Dependence on the config
@@ -71,14 +71,13 @@ The checks form **one continuous scenario**: each check starts from the state th
 The tests read `managespacontroller.py.json` and assume its current values. A change to one of these needs a matching change in the tests:
 
 - the session list (lights and circulation, then pumps 1-3) and the maintenance list (circulation, pumps 1-3, blower);
-- `spa_pump4` in the `disabled` section;
 - stagger delay 1 s, flush time 30 s, circulation duration 3600 s;
 - maintenance times `06:00`, `14:00` and `22:00` (the fault check uses `22:00` to verify that a maintenance time during a fault does nothing);
 - temperature monitor limit 40 °C with hysteresis 0.5 °C;
-- frost monitor below 4 °C on `spa_temp_3` with `force_on: spa_heatpump` and `unknown_active`;
+- frost monitor below 4 °C on `spa_temp_3` with `force_on: spa_heatpump` and `unknown_active` switched off;
 - monitor order water, temperature, frost with warnings `WaterLow`, `TempHigh`, `Frost` (Spa Status priority);
-- water level input on pin 12 with `gpio_on: 0` (the current override), power output on pin 22;
-- heat pump on pin 26 (active high), pump 1 on pin 21 (active low).
+- water level input on pin 23 with `gpio_on: 1`, power output on pin 17 (active low), settle time 1 s and a measuring interval of 300 s;
+- heat pump on pin 26 (on = high, because its channel drives the power relay through its break contact), pump 1 on pin 13 (active low).
 
 ## What is not covered
 

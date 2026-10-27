@@ -88,9 +88,9 @@ check("start: Spa Status Normal, nothing active", status.state == "Normal" and s
 check("Spa Status options follow config order", status.options == ["WaterLow", "TempHigh", "Frost", "Normal"])
 check("monitors are not separate HA entities", all(m.config_topic is None and m.state_topic is None for m in monitors))
 check("start: heat pump pin high (gpio_on=1)", GPIO.pins[26] == 1)
-check("start: pump1 pin at off-level (active low = 1)", GPIO.pins[21] == 1)
+check("start: pump1 pin at off-level (active low = 1)", GPIO.pins[13] == 1)
+check("start: level power pin at off-level (active low = 1)", GPIO.pins[17] == 1)
 check("start: buzzer and level power are not spa outputs", "spa_buzzer" not in O and "spa_water_level_power" not in O)
-check("disabled pump 4: not an output, skipped in both lists", "spa_pump4" not in entities and all("spa_pump4" not in step for step in spa.session_list + spa.maintenance_list))
 
 t = 1000.0
 spa.handle_command("spa_session", "on", t)
@@ -113,21 +113,8 @@ check("manual blower on during session", "spa_blower" in on())
 spa.handle_command("spa_session", "off", t + 20)
 check("session off: only heat pump, Standby, switch off", on() == ["spa_heatpump"] and spa.state == "Standby" and not spa.session_switch.is_on)
 
-r = spa.switch("spa_heater", True)
-check("heater refused without circulation", not r and "spa_heater" not in on())
-spa.handle_command("spa_heater", "on", t + 29)
-check("Spa Response: refused command with reason", response.state == "spa_heater on: refused (requires spa_circulation)")
-first_time = response.attributes()["time"]
 spa.handle_command("spa_circulation", "on", t + 30)
 check("Spa Response: OK for a successful command", response.state == "spa_circulation on: OK")
-spa.handle_command("spa_heater", "on", t + 31)
-check("heater on -> heat pump off", "spa_heater" in on() and "spa_heatpump" not in on())
-spa.handle_command("spa_circulation", "off", t + 32)
-check("circulation off -> heater off -> heat pump on", on() == ["spa_heatpump"])
-spa.handle_command("spa_circulation", "on", t + 33)
-spa.handle_command("spa_heater", "on", t + 34)
-spa.handle_command("spa_heater", "off", t + 35)
-check("heater off -> heat pump back on", "spa_heatpump" in on() and "spa_heater" not in on())
 spa.handle_command("spa_circulation", "off", t + 36)
 
 check("all outputs at initial state: reported Standby", spa.operation_sensor.value == "Standby")
@@ -175,6 +162,7 @@ spa.handle_command("spa_session", "on", t + 4002)
 check("fault: session refused", spa.state == "Standby" and on() == [] and not spa.session_switch.is_on)
 spa.handle_command("spa_pump1", "on", t + 4003)
 check("fault: manual pump refused", on() == [])
+check("Spa Response: refused command with reason", response.state == "spa_pump1 on: refused (fault active)")
 spa.handle_reading("spa_temp_1", 39.8)
 spa.tick(t + 4004, datetime(2026, 10, 7, 15, 2))
 check("fault: 39.8 still active (hysteresis)", spa.fault)
@@ -187,9 +175,9 @@ spa.handle_reading("spa_temp_1", 40.0)
 spa.tick(t + 4008, datetime(2026, 10, 7, 22, 2))
 check("40.0 does not trip", not spa.fault)
 
-GPIO.inputs[12] = 0  # gpio_on = 0 -> problem
+GPIO.inputs[23] = 1  # gpio_on = 1 -> problem
 v = entities["spa_water_level"].measure()
-check("level measure: reads problem, power off afterwards", v is True and GPIO.pins[22] == 0)
+check("level measure: reads problem, power off afterwards", v is True and GPIO.pins[17] == 1)
 spa.handle_reading("spa_water_level", v)
 spa.tick(t + 4010, datetime(2026, 10, 7, 22, 3))
 check("water fault active with warning WaterLow", spa.fault and spa.warnings() == ["WaterLow"])
@@ -219,7 +207,7 @@ b2 = entities["spa_buzzer"].is_on
 check("buzzer pulses 1 s on / 1 s off", b1 is True and b2 is False)
 check("LCD line 0 shows warning, 20 chars", lcd.lines[0].startswith("WARNING: WaterLow") and len(lcd.lines[0]) == 20)
 check("LCD line 1 water temp", lcd.lines[1].startswith("Water Temp:") and lcd.lines[1].endswith("40.0"))
-GPIO.inputs[12] = 1
+GPIO.inputs[23] = 0
 spa.handle_reading("spa_water_level", entities["spa_water_level"].measure())
 spa.tick(t + 4020, datetime(2026, 10, 7, 22, 4))
 d.update(spa, 102.0)
@@ -237,27 +225,23 @@ check("frost: reported Frost", spa.operation_sensor.value == "Frost")
 check("frost: Spa Status Frost", status.state == "Frost" and status.attributes() == {"active": ["Frost"]})
 spa.handle_command("spa_heatpump", "off", t + 2)
 check("frost: heat pump off refused", "spa_heatpump" in on())
-spa.handle_command("spa_circulation", "on", t + 3)
-spa.handle_command("spa_heater", "on", t + 4)
-check("frost: heater refused (would switch heat pump off)", "spa_heater" not in on() and "spa_heatpump" in on())
-spa.handle_command("spa_circulation", "off", t + 5)
 spa.handle_command("spa_session", "on", t + 6)
 check("frost + session: reported Active", spa.operation_sensor.value == "Active")
 check("frost + session: Spa Status still Frost", status.state == "Frost")
 spa.handle_command("spa_session", "off", t + 7)
 check("session off during frost: reported Frost, heat pump on", spa.operation_sensor.value == "Frost" and on() == ["spa_heatpump"])
-GPIO.inputs[12] = 0
+GPIO.inputs[23] = 1
 spa.handle_reading("spa_water_level", entities["spa_water_level"].measure())
 spa.tick(t + 8, W2)
 check("frost + fault: fault wins, everything off, Error", on() == [] and spa.operation_sensor.value == "Error")
 check("frost + low water: Spa Status WaterLow (first in config), both active", status.state == "WaterLow" and status.attributes() == {"active": ["WaterLow", "Frost"]})
-GPIO.inputs[12] = 1
+GPIO.inputs[23] = 0
 spa.handle_reading("spa_water_level", entities["spa_water_level"].measure())
 spa.tick(t + 9, W2)
 check("fault cleared during frost: heat pump on, Frost", on() == ["spa_heatpump"] and spa.operation_sensor.value == "Frost")
 spa.handle_reading("spa_temp_3", None)
 spa.tick(t + 10, W2)
-check("air temp unknown: frost active (unknown_active)", entities["spa_status_frost"].is_on)
+check("air temp unknown: frost not active (unknown_active off while the thermometers are disconnected)", not entities["spa_status_frost"].is_on)
 spa.handle_reading("spa_temp_3", 10.0)
 spa.tick(t + 11, W2)
 check("air 10: frost off, reported Standby", not entities["spa_status_frost"].is_on and spa.operation_sensor.value == "Standby")
@@ -302,12 +286,12 @@ except Exception:
     ok = False
 check("no display during session: update does not raise", ok)
 # Buzzer still works without a display
-GPIO.inputs[12] = 0
+GPIO.inputs[23] = 1
 spa.handle_reading("spa_water_level", entities["spa_water_level"].measure())
 spa.tick(t + 22, W2)
 dd.update(spa, 400.0)
 check("no display: buzzer still pulses on fault", entities["spa_buzzer"].is_on)
-GPIO.inputs[12] = 1
+GPIO.inputs[23] = 0
 spa.handle_reading("spa_water_level", entities["spa_water_level"].measure())
 spa.tick(t + 23, W2)
 dd.update(spa, 401.0)
@@ -389,15 +373,15 @@ code, raw = http("/api/status")
 snap = json.loads(raw)
 check("web: status has operation, status and values", code == 200 and snap["operation"] == spa.operation()
       and snap["status"] == status.state and any(v["name"] == "Water Temp" for v in snap["values"]))
-check("web: controls start with the Session switch and contain no internal or disabled outputs",
+check("web: controls start with the Session switch and contain no internal outputs",
       snap["controls"][0]["id"] == "spa_session"
-      and not {"spa_buzzer", "spa_water_level_power", "spa_pump4"} & {c["id"] for c in snap["controls"]})
+      and not {"spa_buzzer", "spa_water_level_power"} & {c["id"] for c in snap["controls"]})
 code, raw = http("/api/command", {"target": "spa_circulation", "value": "on"})
 check("web: command switches an output", code == 200 and json.loads(raw) == {"ok": True, "refused": None}
       and "spa_circulation" in on())
 http("/api/command", {"target": "spa_circulation", "value": "off"})
-code, raw = http("/api/command", {"target": "spa_heater", "value": "on"})
-check("web: refused command returns the reason", json.loads(raw)["refused"] == "requires spa_circulation")
+code, raw = http("/api/command", {"target": "spa_pump9", "value": "on"})
+check("web: refused command returns the reason", json.loads(raw)["refused"] == "unknown target spa_pump9")
 code, raw = http("/api/command", {"target": "spa_session", "value": "on"})
 check("web: Session switch starts a session", json.loads(raw)["refused"] is None and spa.state == "Session")
 http("/api/command", {"target": "spa_session", "value": "off"})

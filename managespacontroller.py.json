@@ -28,7 +28,6 @@
 			"direction": "output",
 			"pin": 26,
 			"initial_state": "on",
-			"conflict": "spa_heater",
 			"device_class": "switch",
 			"config_topic": "homeassistant/switch/spa-controller/spa_heatpump/config",
 			"command_topic": "spa-controller/spa_heatpump/set",
@@ -38,28 +37,11 @@
 			"gpio_on": 1,
 			"gpio_off": 0
 		},
-		"spa_heater": {
-			"name": "Spa Heater",
-			"short_name": "HT",
-			"direction": "output",
-			"pin": 19,
-			"initial_state": "off",
-			"conflict": "spa_heatpump",
-			"device_class": "switch",
-			"config_topic": "homeassistant/switch/spa-controller/spa_heater/config",
-			"command_topic": "spa-controller/spa_heater/set",
-			"state_topic": "spa-controller/spa_heater",
-			"payload_on": "on",
-			"payload_off": "off",
-			"gpio_on": 0,
-			"gpio_off": 1,
-			"requires": "spa_circulation"
-		},
 		"spa_circulation": {
 			"name": "Spa Circulation Pump",
 			"short_name": "C",
 			"direction": "output",
-			"pin": 13,
+			"pin": 19,
 			"initial_state": "off",
 			"device_class": "switch",
 			"config_topic": "homeassistant/switch/spa-controller/spa_circulation/config",
@@ -74,7 +56,7 @@
 			"name": "Spa Pump #1",
 			"short_name": "1",
 			"direction": "output",
-			"pin": 21,
+			"pin": 13,
 			"initial_state": "off",
 			"device_class": "switch",
 			"config_topic": "homeassistant/switch/spa-controller/spa_pump1/config",
@@ -89,7 +71,7 @@
 			"name": "Spa Pump #2",
 			"short_name": "2",
 			"direction": "output",
-			"pin": 20,
+			"pin": 6,
 			"initial_state": "off",
 			"device_class": "switch",
 			"config_topic": "homeassistant/switch/spa-controller/spa_pump2/config",
@@ -104,7 +86,7 @@
 			"name": "Spa Pump #3",
 			"short_name": "3",
 			"direction": "output",
-			"pin": 7,
+			"pin": 22,
 			"initial_state": "off",
 			"device_class": "switch",
 			"config_topic": "homeassistant/switch/spa-controller/spa_pump3/config",
@@ -119,7 +101,7 @@
 			"name": "Spa Lights",
 			"short_name": "L",
 			"direction": "output",
-			"pin": 6,
+			"pin": 27,
 			"initial_state": "off",
 			"device_class": "switch",
 			"config_topic": "homeassistant/switch/spa-controller/spa_lights/config",
@@ -134,7 +116,7 @@
 			"name": "Spa Blower",
 			"short_name": "B",
 			"direction": "output",
-			"pin": 16,
+			"pin": 5,
 			"initial_state": "off",
 			"device_class": "switch",
 			"config_topic": "homeassistant/switch/spa-controller/spa_blower/config",
@@ -145,44 +127,29 @@
 			"gpio_on": 0,
 			"gpio_off": 1
 		},
-		"spa_ozonator": {
-			"name": "Spa Ozonator",
-			"short_name": "O",
-			"direction": "output",
-			"pin": 25,
-			"initial_state": "off",
-			"device_class": "switch",
-			"config_topic": "homeassistant/switch/spa-controller/spa_ozonator/config",
-			"command_topic": "spa-controller/spa_ozonator/set",
-			"state_topic": "spa-controller/spa_ozonator",
-			"payload_on": "on",
-			"payload_off": "off",
-			"gpio_on": 0,
-			"gpio_off": 1
-		},
 		"spa_water_level": {
-			"name": "Spa Water Level (OVERRIDE)",
+			"name": "Spa Water Level",
 			"direction": "input",
-			"pin": 12,
+			"pin": 23,
 			"device_class": "problem",
 			"config_topic": "homeassistant/binary_sensor/spa-controller/spa_water_level/config",
 			"state_topic": "spa-controller/spa_water_level",
 			"pull_up_down": "up",
 			"payload_on": "problem",
 			"payload_off": "ok",
-			"gpio_on": 0,
-			"gpio_off": 1,
+			"gpio_on": 1,
+			"gpio_off": 0,
 			"power": "spa_water_level_power",
-			"interval_secs": 10,
-			"settle_secs": 0.1
+			"interval_secs": 300,
+			"settle_secs": 1
 		},
 		"spa_water_level_power": {
 			"name": "Spa Water Level Power",
 			"direction": "output",
-			"pin": 22,
+			"pin": 17,
 			"initial_state": "off",
-			"gpio_on": 1,
-			"gpio_off": 0
+			"gpio_on": 0,
+			"gpio_off": 1
 		},
 		"spa_buzzer": {
 			"name": "Spa Buzzer",
@@ -269,7 +236,7 @@
 				"check_01": "value_less, spa_temp_3, 4"
 			},
 			"force_on": "spa_heatpump",
-			"unknown_active": true,
+			"unknown_active": false,
 			"warning": "Frost"
 		}
 	},
@@ -344,21 +311,5 @@
 	"web": {
 		"port": 80
 	},
-	"disabled": {
-		"spa_pump4": {
-			"name": "Spa Pump #4",
-			"short_name": "4",
-			"direction": "output",
-			"pin": 8,
-			"initial_state": "off",
-			"device_class": "switch",
-			"config_topic": "homeassistant/switch/spa-controller/spa_pump4/config",
-			"command_topic": "spa-controller/spa_pump4/set",
-			"state_topic": "spa-controller/spa_pump4",
-			"payload_on": "on",
-			"payload_off": "off",
-			"gpio_on": 0,
-			"gpio_off": 1
-		}
-	}
+	"disabled": {}
 }
