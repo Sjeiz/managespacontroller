@@ -155,7 +155,7 @@ Between measurements the last reading is kept. The first measurement runs at sta
 - Water level sensor: `power` (the output that powers it) and settle time.
 - Per monitor (order = Spa Status priority): `warning` (Spa Status value), limit and, for value checks, hysteresis; optional `force_on` (output kept on while active) and `unknown_active` (an unknown value counts as true).
 - Section `web`: port of the web page.
-- Section `spa`: Session switch, `spa_operation`, Spa Status and Spa Response sensors (HA fields), circulation output, session list, maintenance list (lists of steps; outputs in one step switch on together), stagger delay, maintenance times (list of clock times), flush time, circulation duration, status log interval.
+- Section `spa`: Session switch, `spa_operation`, Spa Status and Spa Response sensors (HA fields), circulation output, session list, maintenance list (lists of steps; outputs in one step switch on together), stagger delay, maintenance times (list of clock times), flush time, circulation duration, status log interval (0 switches the periodic status line off; the one at startup stays).
 
 ### Code structure
 | Module | Contents |

@@ -227,7 +227,8 @@ def main():
             if web is not None:
                 web.update(spa.snapshot())
 
-            if time.monotonic() - status_logged_at >= status_log_secs:
+            # A zero interval switches the periodic status line off; the one at startup stays
+            if status_log_secs > 0 and time.monotonic() - status_logged_at >= status_log_secs:
                 status_logged_at = time.monotonic()
                 log.info(spa.status_line())
 
