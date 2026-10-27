@@ -235,7 +235,7 @@
 				"check_01": "value_less, spa_temp_3, 4"
 			},
 			"force_on": "spa_heatpump",
-			"unknown_active": false,
+			"unknown_active": true,
 			"warning": "Frost"
 		}
 	},

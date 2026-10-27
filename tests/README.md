@@ -59,7 +59,7 @@ The checks form **one continuous scenario**: each check starts from the state th
 | **Fault interlock** | Water temperature above 40 °C: everything off including the heat pump, `Error`; Session switch and manual control refused; hysteresis (still active at 39.8 °C, cleared at 39.4 °C, 40.0 °C does not trip); a maintenance time during a fault does nothing; clearing restores `initial_state`. |
 | **Water level sensor** | The power output is switched on only while measuring and is off afterwards; low water gives a fault with warning `WaterLow`. |
 | **Buzzer and LCD** | The buzzer pulses 1 s on / 1 s off during a fault and is off afterwards; LCD line 0 shows the warning, line 1 the water temperature. |
-| **Frost protection** | Below 4 °C the heat pump is forced on and `Frost` is reported; switching it off and switching the heater on are refused; `Active` (Session) takes display priority over `Frost`; a fault takes precedence (everything off), and clearing it switches the heat pump back on; an unknown outside temperature does not count as frost while `unknown_active` is off; above 4 °C the heat pump can be switched off again; an unknown water temperature does not cause a fault. |
+| **Frost protection** | Below 4 °C the heat pump is forced on and `Frost` is reported; switching it off and switching the heater on are refused; `Active` (Session) takes display priority over `Frost`; a fault takes precedence (everything off), and clearing it switches the heat pump back on; an unknown outside temperature counts as frost, so a failing sensor still protects; above 4 °C the heat pump can be switched off again; an unknown water temperature does not cause a fault. |
 | **Spa Status** | `Normal` at startup with nothing active; options follow the config order of the monitors; monitors are not separate HA entities; `TempHigh`, `WaterLow` and `Frost` when active; with low water and frost together the first monitor in the config (`WaterLow`) wins and the attribute `active` lists both. |
 | **Display failures** | No LCD at startup and during a session does not raise; the buzzer keeps working without an LCD; the LCD reconnects when it becomes available; losing the LCD during operation does not raise and marks it unavailable. |
 | **Spa Response** | `OK` for a successful command; a refused command with its reason; an unknown target is reported; a repeated identical response gets a new `time` attribute. |
@@ -74,7 +74,7 @@ The tests read `managespacontroller.py.json` and assume its current values. A ch
 - stagger delay 1 s, flush time 30 s, circulation duration 3600 s;
 - maintenance times `06:00`, `14:00` and `22:00` (the fault check uses `22:00` to verify that a maintenance time during a fault does nothing);
 - temperature monitor limit 40 °C with hysteresis 0.5 °C;
-- frost monitor below 4 °C on `spa_temp_3` with `force_on: spa_heatpump` and `unknown_active` switched off;
+- frost monitor below 4 °C on `spa_temp_3` with `force_on: spa_heatpump` and `unknown_active` switched on;
 - monitor order water, temperature, frost with warnings `WaterLow`, `TempHigh`, `Frost` (Spa Status priority);
 - water level input on pin 23 with `gpio_on: 1`, power output on pin 26 (active low), settle time 0.5 s and a measuring interval of 60 s;
 - heat pump on pin 17 (on = high, because its channel drives the power relay through its break contact), pump 1 on pin 22 (active low).
