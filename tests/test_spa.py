@@ -89,7 +89,7 @@ check("Spa Status options follow config order", status.options == ["WaterLow", "
 check("monitors are not separate HA entities", all(m.config_topic is None and m.state_topic is None for m in monitors))
 check("start: heat pump pin high (gpio_on=1)", GPIO.pins[26] == 1)
 check("start: pump1 pin at off-level (active low = 1)", GPIO.pins[13] == 1)
-check("start: level power pin at off-level (active low = 1)", GPIO.pins[17] == 1)
+check("start: level power pin at off-level (0)", GPIO.pins[17] == 0)
 check("start: buzzer and level power are not spa outputs", "spa_buzzer" not in O and "spa_water_level_power" not in O)
 
 t = 1000.0
@@ -177,7 +177,7 @@ check("40.0 does not trip", not spa.fault)
 
 GPIO.inputs[23] = 1  # gpio_on = 1 -> problem
 v = entities["spa_water_level"].measure()
-check("level measure: reads problem, power off afterwards", v is True and GPIO.pins[17] == 1)
+check("level measure: reads problem, power off afterwards", v is True and GPIO.pins[17] == 0)
 spa.handle_reading("spa_water_level", v)
 spa.tick(t + 4010, datetime(2026, 10, 7, 22, 3))
 check("water fault active with warning WaterLow", spa.fault and spa.warnings() == ["WaterLow"])
