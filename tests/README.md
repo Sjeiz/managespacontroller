@@ -53,7 +53,7 @@ The checks form **one continuous scenario**: each check starts from the state th
 | Area | Checks |
 |---|---|
 | **Startup** | Only the heat pump is on (`initial_state`); the pin levels right after `setup()` already match `initial_state`, so no output changes level before the controller starts; pin levels for the relay board and for the heat pump channel on its break contact; buzzer and water level power are internal outputs. |
-| **Session** | Lights and circulation switch on together; pumps follow one by one after the stagger delay; Session switch and `spa_operation` follow the state; a maintenance time during a session does nothing; manual control during a session; Session switch off returns to Standby. |
+| **Session** | A manually switched blower is left alone when the session starts; lights and circulation switch on together; pumps follow one by one after the stagger delay; Session switch and `spa_operation` follow the state; a maintenance time during a session does nothing; manual control during a session; Session switch off puts every output back to its `initial_state`, including a heat pump that was switched off by hand. |
 | **Manual reporting** | `Manual` only when an output that is off by default is on; switching the heat pump off stays `Standby`; manual control in Standby switches only that output. |
 | **Maintenance** | Starts at a configured clock time with circulation and without lights; pumps and blower flush; after the flush time only circulation (and the heat pump) remain; the same minute does not retrigger; ends after the circulation duration; the Session switch during maintenance turns it into a session (blower off, lights on, timers cancelled). |
 | **Fault interlock** | Water temperature above 40 °C: everything off including the heat pump, `Error`; Session switch and manual control refused; hysteresis (still active at 39.8 °C, cleared at 39.4 °C, 40.0 °C does not trip); a maintenance time during a fault does nothing; clearing restores `initial_state`. |
@@ -76,7 +76,7 @@ The tests read `managespacontroller.py.json` and assume its current values. A ch
 - temperature monitor limit 40 °C with hysteresis 0.5 °C;
 - frost monitor below 4 °C on `spa_temp_3` with `force_on: spa_heatpump` and `unknown_active` switched off;
 - monitor order water, temperature, frost with warnings `WaterLow`, `TempHigh`, `Frost` (Spa Status priority);
-- water level input on pin 23 with `gpio_on: 1`, power output on pin 26 (active low), settle time 0.5 s and a measuring interval of 60 s (shortened for testing);
+- water level input on pin 23 with `gpio_on: 1`, power output on pin 26 (active low), settle time 0.5 s and a measuring interval of 60 s;
 - heat pump on pin 17 (on = high, because its channel drives the power relay through its break contact), pump 1 on pin 22 (active low).
 
 ## What is not covered

@@ -96,7 +96,10 @@ check("setup: heat pump pin already high, so it does not drop out before start",
 check("start: buzzer and level power are not spa outputs", "spa_buzzer" not in O and "spa_water_level_power" not in O)
 
 t = 1000.0
+spa.handle_command("spa_blower", "on", t - 1)
 spa.handle_command("spa_session", "on", t)
+check("session from Standby: a manually switched blower is left alone", "spa_blower" in on())
+spa.handle_command("spa_blower", "off", t)
 check("session: lights + circulation at once", on() == ["spa_circulation", "spa_heatpump", "spa_lights"])
 spa.tick(t + 0.5, W)
 check("session: no pump before stagger delay", "spa_pump1" not in on())
@@ -112,9 +115,10 @@ check("maintenance time during session: nothing", spa.state == "Session")
 
 spa.handle_command("spa_blower", "on", t + 11)
 check("manual blower on during session", "spa_blower" in on())
+spa.handle_command("spa_heatpump", "off", t + 12)
 
 spa.handle_command("spa_session", "off", t + 20)
-check("session off: only heat pump, Standby, switch off", on() == ["spa_heatpump"] and spa.state == "Standby" and not spa.session_switch.is_on)
+check("session off: every output back to its initial state, Standby", on() == ["spa_heatpump"] and spa.state == "Standby" and not spa.session_switch.is_on)
 
 spa.handle_command("spa_circulation", "on", t + 30)
 check("Spa Response: OK for a successful command", response.state == "spa_circulation on: OK")
@@ -190,14 +194,15 @@ check("water fault: Spa Status WaterLow", status.state == "WaterLow")
 class FakeLCD:
     def __init__(s):
         s.lines = {}
+        s.backlit = True
 
     def printline(s, n, v):
         s.lines[n] = v
 
-    def backlight(s): pass
+    def backlight(s): s.backlit = True
     def display(s): pass
     def noDisplay(s): pass
-    def noBacklight(s): pass
+    def noBacklight(s): s.backlit = False
 
 
 lcd = FakeLCD()
@@ -226,6 +231,9 @@ spa.tick(t + 1, W2)
 check("frost 3.9: monitor on, heat pump forced on", entities["spa_status_frost"].is_on and "spa_heatpump" in on())
 check("frost: reported Frost", spa.operation_sensor.value == "Frost")
 check("frost: Spa Status Frost", status.state == "Frost" and status.attributes() == {"active": ["Frost"]})
+d.update(spa, 104.0)
+check("frost: LCD stays on in Standby and shows FROST", lcd.lines[0].startswith("FROST HP") and d._visible)
+check("frost: no backlight while only frost is awake", not lcd.backlit)
 spa.handle_command("spa_heatpump", "off", t + 2)
 check("frost: heat pump off refused", "spa_heatpump" in on())
 spa.handle_command("spa_session", "on", t + 6)

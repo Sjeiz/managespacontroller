@@ -66,11 +66,13 @@ The Pi runs a git clone of this repo; deploy by pushing to GitHub and pulling on
 | From | To | When | Action |
 |---|---|---|---|
 | (start) | Standby | Controller starts, after the first sensor readings (max 15 s) | Every output to its `initial_state`; if a problem monitor is active, the fault interlock applies instead |
-| Standby | Session | Session switch on | Session list |
-| Standby | Maintenance | Maintenance time reached | Maintenance list, timers start |
-| Maintenance | Session | Session switch on | Session list, timers cancelled |
-| Session or Maintenance | Standby | Session switch off | All list outputs off |
-| Maintenance | Standby | Circulation timer expired | All list outputs off |
+| Standby | Session | Session switch on | Session list on; outputs outside the list are left as they are |
+| Standby | Maintenance | Maintenance time reached | Maintenance list on, timers start; outputs outside the list are left as they are |
+| Maintenance | Session | Session switch on | Maintenance-only outputs off, session list on, timers cancelled |
+| Session or Maintenance | Standby | Session switch off | Every output to its `initial_state` |
+| Maintenance | Standby | Circulation timer expired | Every output to its `initial_state` |
+
+Standby is what the config says: leaving a list puts every output back to its `initial_state`, so an output that no list owns keeps running and one that is on by default comes back on. Starting a list only switches that list on, so an output switched on by hand stays on.
 
 A maintenance time during a session or a running maintenance does nothing. When the controller stops, every spa output goes to its `initial_state`.
 
@@ -107,6 +109,7 @@ Each monitor that compares a value has its own hysteresis, so sensor jitter arou
 
 ### Frost protection
 A monitor with `force_on` keeps that output on while it is active; switching it off is refused. With `unknown_active` the monitor also counts as active when its value is unknown (sensor failure). The fault interlock takes precedence.
+While a `force_on` monitor is active the LCD stays readable in Standby and shows its `warning` in capitals, but without backlight: the condition can last for weeks.
 
 ### Reporting to HA
 - **Session switch:** on during Session and Maintenance.

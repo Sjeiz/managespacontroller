@@ -77,9 +77,6 @@ class Spa:
     def _names(steps):
         return [uid for step in steps for uid in step]
 
-    def _list_outputs(self):
-        return set(self._names(self.session_list)) | set(self._names(self.maintenance_list))
-
     # ---- startup, commands, readings -----------------------------------------
 
     def start(self):
@@ -164,12 +161,17 @@ class Spa:
         warnings = [m.warning for m in self._problem_monitors() if m.is_on and m.warning]
         log.warning("Fault: active (%s)", ", ".join(warnings) or "problem")
         self.fault = True
-        self._to_standby()
+        self._stop_lists()
+        self._set_state(STANDBY)
         for uid in self.outputs:
             self.switch(uid, False)
 
     def warnings(self):
         return [m.warning for m in self._problem_monitors() if m.is_on and m.warning]
+
+    def forced_warnings(self):
+        """Warnings of active force_on monitors (frost protection), for the display."""
+        return [m.warning for m in self.monitors if m.is_on and m.force_on and m.warning]
 
     # ---- force_on (frost protection); the fault interlock takes precedence ---
 
@@ -237,23 +239,28 @@ class Spa:
             return
         if self.state == SESSION:
             return
+        # Coming from Standby there is nothing of ours to clean up, so a manually
+        # switched output stays as the user left it
+        leaving = self.maintenance_list if self.state == MAINTENANCE else []
         self._cancel_timers()
         self._set_state(SESSION)
-        self._start_list(self.session_list, self.maintenance_list, now)
+        self._start_list(self.session_list, leaving, now)
 
     def _enter_maintenance(self, now):
         self._set_state(MAINTENANCE)
         self._flush_until = None  # starts when the list has been switched on
         self._circulation_until = now + self.circulation_secs
-        self._start_list(self.maintenance_list, self.session_list, now)
+        self._start_list(self.maintenance_list, [], now)  # only ever entered from Standby
         self._publish_state()
 
     def _to_standby(self):
+        self._stop_lists()
+        self._apply_initial_states()
+        self._set_state(STANDBY)
+
+    def _stop_lists(self):
         self._cancel_timers()
         self._sequence = []
-        for uid in self._list_outputs():
-            self.switch(uid, False)
-        self._set_state(STANDBY)
 
     def _cancel_timers(self):
         self._flush_until = None
