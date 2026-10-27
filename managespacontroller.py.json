@@ -19,7 +19,7 @@
 		},
 		"sleep": 0.1,
 		"republish_sec": 60,
-		"debug": "true"
+		"debug": false
 	},
 	"gpios": {
 		"spa_heatpump": {
@@ -138,7 +138,6 @@
 			"payload_on": "problem",
 			"payload_off": "ok",
 			"gpio_on": 1,
-			"gpio_off": 0,
 			"power": "spa_water_level_power",
 			"interval_secs": 60,
 			"settle_secs": 0.5
