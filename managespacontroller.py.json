@@ -140,7 +140,7 @@
 			"gpio_on": 1,
 			"gpio_off": 0,
 			"power": "spa_water_level_power",
-			"interval_secs": 300,
+			"interval_secs": 60,
 			"settle_secs": 1
 		},
 		"spa_water_level_power": {
