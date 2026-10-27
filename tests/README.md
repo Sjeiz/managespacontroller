@@ -14,7 +14,7 @@ python tests/test_spa.py
 - Every check prints `PASS <name>` or `FAIL <name>`; a failure also prints the outputs that are on, the state and the fault flag.
 - Log lines of the controller go to stderr, with the prefix `  log:`.
 - The last line is `RESULT: ALL PASSED` or `RESULT: FAILED`. The exit code is `0` when all checks pass and `1` otherwise, so the script can be used in a script or CI step.
-- A run takes about ten seconds. Most of that is the water level sensor: every measurement really waits the configured settle time.
+- A run takes a few seconds. Most of that is the water level sensor: every measurement really waits the configured settle time.
 
 To see only the result and the failures:
 
@@ -76,7 +76,7 @@ The tests read `managespacontroller.py.json` and assume its current values. A ch
 - temperature monitor limit 40 °C with hysteresis 0.5 °C;
 - frost monitor below 4 °C on `spa_temp_3` with `force_on: spa_heatpump` and `unknown_active` switched off;
 - monitor order water, temperature, frost with warnings `WaterLow`, `TempHigh`, `Frost` (Spa Status priority);
-- water level input on pin 23 with `gpio_on: 1`, power output on pin 26 (active low), settle time 1 s and a measuring interval of 60 s (shortened for testing);
+- water level input on pin 23 with `gpio_on: 1`, power output on pin 26 (active low), settle time 0.5 s and a measuring interval of 60 s (shortened for testing);
 - heat pump on pin 17 (on = high, because its channel drives the power relay through its break contact), pump 1 on pin 22 (active low).
 
 ## What is not covered
