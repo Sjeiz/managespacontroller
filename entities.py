@@ -40,7 +40,8 @@ class Publisher:
         )
 
     def status(self, topic, payload):
-        self._client.publish(topic, payload, qos=self._qos)
+        # Retained, so a restarting Home Assistant knows at once whether the spa is alive
+        self._client.publish(topic, payload, qos=self._qos, retain=True)
 
 
 class Entity:

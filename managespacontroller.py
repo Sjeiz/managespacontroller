@@ -97,7 +97,9 @@ def create_mqtt_client(mqtt_config, events):
     client = MQTT.Client(protocol=MQTT.MQTTv5)
     if mqtt_config.get("user"):
         client.username_pw_set(username=mqtt_config["user"], password=mqtt_config.get("password"))
-    client.will_set(mqtt_config["statustopic"], mqtt_config["statusoffline"], qos=mqtt_config["qos"])
+    client.will_set(
+        mqtt_config["statustopic"], mqtt_config["statusoffline"], qos=mqtt_config["qos"], retain=True
+    )
 
     # Callbacks run in the paho thread: they only put events in the queue
     def on_connect(client, userdata, flags, rc, properties=None):
@@ -262,7 +264,9 @@ def main():
             if isinstance(entity, Output):
                 entity.write(entity.initial_on and entity.controllable)
         # Publish and disconnect while the network loop still runs, so the messages get out
-        client.publish(mqtt_config["statustopic"], mqtt_config["statusoffline"], qos=mqtt_config["qos"])
+        client.publish(
+            mqtt_config["statustopic"], mqtt_config["statusoffline"], qos=mqtt_config["qos"], retain=True
+        )
         client.disconnect(reasoncodes.ReasonCodes(packettypes.PacketTypes.DISCONNECT, "Disconnect", 4))
         client.loop_stop()
 
