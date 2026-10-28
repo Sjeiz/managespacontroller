@@ -176,3 +176,4 @@ Scenario tests without hardware: `python tests/test_spa.py`. Run them before eve
 
 ## Open issues
 1. **Water level sensor bridged in hardware (temporary).** The electrodes are oxidized and have to be replaced by titanium bolts with a round head, both of the same metal. Until then the contact is bridged physically, so the input always reads "water present" and low-water protection is inactive. The config carries the real polarity, so removing the bridge restores the protection without a config change.
+2. **The heat pump itself cannot be reached.** The controller only switches its mains power; whether it then heats is up to the heat pump's own controls, which are reachable only through the Poolex app. So the spa cannot be warmed up from away unless that app is at hand. To be worked out: a way to set the heat pump on, off and to a temperature without that app.
