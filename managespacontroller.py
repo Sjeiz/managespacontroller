@@ -252,7 +252,7 @@ def main():
                 # A spa is better off with a hiccup than with a controller that quits
                 log.exception("Unexpected error, carrying on")
                 line = error.__traceback__.tb_lineno if error.__traceback__ else "?"
-                display.error(f"ERR {type(error).__name__} L{line}")
+                display.error(f"Line{line}:{type(error).__name__}({error})")
                 display.beep()
                 time.sleep(mqtt_config["sleep"])
 

@@ -88,17 +88,20 @@ class Display:
         self._reconnect_at = time.monotonic() + RECONNECT_SECS
 
     def _render(self, spa, now):
-        if spa.state == STANDBY and not spa.fault and self._error is None:
+        if self._error:
+            # Nothing but the error, spread over the whole screen until a restart
+            self._show()
+            for line in range(self._line_count):
+                self._print(line, self._error[line * self._columns : (line + 1) * self._columns])
+            return
+        if spa.state == STANDBY and not spa.fault:
             self._hide()
             return
         self._show()
         # A force_on monitor (frost) is reported in front of the active outputs
         forced = spa.forced_warnings()
-        # A fault comes first: that is the one asking you to do something to the spa
         if spa.fault:
             status = "WARNING: " + " ".join(spa.warnings())
-        elif self._error:
-            status = self._error
         else:
             active = [o.short_name for o in spa.outputs.values() if o.is_on and o.short_name]
             status = " ".join([w.upper() for w in forced] + active)

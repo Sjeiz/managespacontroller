@@ -216,9 +216,10 @@ d.beep(times=2, seconds=0)
 check("beep: the buzzer pulses and ends up off again", not entities["spa_buzzer"].is_on)
 err_lcd = FakeLCD()
 err_d = Display(lambda: err_lcd, None, temps)
-err_d.error("ERR KeyError L231")
+err_d.error("KeyError L231")
 err_d.update(spa, 1000.0)
-check("error on the display: shown in Standby, so the screen comes on", err_d._visible and err_lcd.lines[0].startswith("ERR KeyError L231"))
+check("error on the display: screen on, the error and nothing else",
+      err_d._visible and err_lcd.lines[0].startswith("KeyError L231") and not err_lcd.lines[1].strip())
 d.update(spa, 100.2)
 b1 = entities["spa_buzzer"].is_on
 d.update(spa, 101.2)
