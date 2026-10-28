@@ -16,7 +16,7 @@ journalctl -u managespacontroller.service --no-pager  # all of it, pipe into gre
 ```
 
 ## Secrets
-The MQTT user and password are not in git. They live on the Pi in `managespacontroller.secrets.json`, next to the script (listed in `.gitignore`). Without the file, or with a damaged one, the controller runs on and logs it: no HA, but the web page still works. Create it once:
+The MQTT user and password are not in git. They live on the Pi in `managespacontroller.secrets.json`, next to the script (listed in `.gitignore`). Create it once:
 
 ```bash
 cd /home/SjeizAdmin/python/managespacontroller/managespacontroller
@@ -125,7 +125,6 @@ While a `force_on` monitor is active its `warning` is shown in capitals on the L
 Control without Home Assistant: open `http://spa-controller.iot.cheizoo.lan` (port from `web.port`) in a browser on the local network. No password.
 - Shows the same as the HA dashboard: Spa Operation, Spa Status, temperatures, water level, and a switch for the Session switch and every spa output. The layout stacks on a phone.
 - Refreshes every 2 s. A command goes into the same queue as MQTT commands, so all rules apply; a refused command shows its reason (e.g. `Refused: fault active`) and the switch falls back.
-- Works when HA or the MQTT broker is down. If the port cannot be opened, the controller logs it and keeps running without the page.
 - Without a `web` section in the config the page is off.
 
 ### Water level sensor
@@ -143,24 +142,29 @@ Between measurements the last reading is kept. The first measurement runs at sta
 - All of them put their results in one queue. Only the main loop reads the queue, touches the Spa and switches outputs; the one exception is the water level sensor, which switches its own power output from its thread (no other code uses that pin).
 
 ### Config
-The keys speak for themselves in `managespacontroller.py.json`. Two things it does not show:
-- Section `disabled`: entity blocks moved here are not read at all, and an output still named in a list is skipped with a log warning. Move a block back to re-enable it.
-- An output with a `command_topic` is a spa output; one without (buzzer, water level power) is internal.
+The keys speak for themselves in `managespacontroller.py.json`. The one thing it does not show: an output with a `command_topic` is a spa output, one without (buzzer, water level power) is internal.
 
 ### Code structure
 | Module | Contents |
 |---|---|
-| `managespacontroller.py` | `main()`: read config, build objects, main loop (service entry point). MQTT connects asynchronously and keeps retrying, so a broker that is down does not stop the controller. An unexpected error in the loop does not end it either: it is logged with a traceback and sounded as three beeps, and the loop carries on. An error that keeps coming back keeps beeping. |
+| `managespacontroller.py` | `main()`: read config, build objects, main loop (service entry point). |
 | `entities.py` | Publisher (MQTT states, attributes and discovery), base class Entity (name, `unique_id`, topics, discovery payload), Output, Input, WaterLevelSensor (Input with power output), TemperatureSensor, TimestampSensor, Monitor, SessionSwitch, OperationSensor, StatusSensor, ResponseSensor |
 | `spa.py` | The state machine (state, transitions, lists, timers, rules), the fault interlock and frost protection; owns all entities; all commands go through it |
 | `webserver.py`, `webserver.html` | Web page: HTTP server in its own thread (status snapshot from the main loop, commands via the queue) and the page itself |
-| `display.py` | LCD and buzzer; gets its information from the Spa. The LCD is optional: if it is missing at startup or fails later, the controller keeps running, logs it once and retries every 60 s. The buzzer does not depend on the LCD. |
+| `display.py` | LCD and buzzer; gets its information from the Spa. The buzzer does not depend on the LCD. |
 
 - An Output switches the pin and remembers its state in one place; outputs are never read back. Only inputs and sensors are read.
 - The fault interlock and frost protection are checked at that single place where outputs are switched.
 - Each sensor class runs its own measuring thread and posts results to the queue.
 - Every class declares its attributes explicitly with defaults; config values are mapped onto them (no `setattr` from config, no `hasattr` checks).
 - No global variables.
+
+## Error handling
+The controller keeps running wherever it can. It needs its config; everything else is optional.
+
+- **Never fatal:** a broker that is down, missing or damaged credentials, no LCD, no buzzer, a web port already in use, a sensor that cannot be read. Each is logged once and retried, and the controller carries on without it. Without credentials there is no Home Assistant, but the web page still switches outputs.
+- **An unexpected error in the main loop** is logged with a traceback and sounded as three beeps, after which the loop simply continues. An error that keeps coming back keeps beeping.
+- **Fatal:** a missing or damaged `managespacontroller.py.json`, and a `circulation`, `power` or `force_on` that names an output the config does not define. Without a config there is nothing to control, and switching relays on a half-read one is worse than stopping.
 
 ## Home Assistant
 - **Entities** come from MQTT discovery (device "Spa Controller"). Since HA 2026.06 a new entity gets the area as prefix (`garden_...`); rename it once in HA to `<domain>.spa_controller_<name>`. The name stays after restarts because the `unique_id` does not change.

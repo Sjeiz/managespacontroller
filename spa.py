@@ -54,7 +54,7 @@ class Spa:
         self._refusal = None
 
     def _validate(self):
-        # Outputs moved to the config's "disabled" section are skipped in the lists
+        # A list may name an output the config does not define; skip it instead of failing
         listed = {uid for step in self.session_list + self.maintenance_list for uid in step}
         skipped = sorted(uid for uid in listed if uid not in self.outputs)
         if skipped:
