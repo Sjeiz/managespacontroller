@@ -39,6 +39,15 @@ EOF
 chmod 600 managespacontroller.secrets.json
 ```
 
+## Fresh install
+`install.sh` turns a bare Raspberry Pi OS into a controller: 1-Wire and I2C, the packages, the systemd service pointing at this clone, and the journal and `/tmp` in RAM. Every step checks before it changes anything, so running it again is harmless. Flash Raspberry Pi OS, clone this repo, then:
+
+```bash
+sudo ./install.sh
+```
+
+Create the secrets file (see [Secrets](#secrets)) and reboot.
+
 ## Deploy
 The Pi runs a git clone of this repo; deploy by pushing to GitHub and pulling on the Pi.
 
@@ -54,7 +63,7 @@ The Pi runs a git clone of this repo; deploy by pushing to GitHub and pulling on
 4. Follow the log (see [Logs](#logs)): `journalctl -u managespacontroller.service -f`
 
 ## SD card
-Normal operation writes almost nothing to the card: the journal and `/tmp` are both in RAM and the controller writes no files of its own, which leaves package installs and `git pull`.
+The controller writes no files of its own, and the journal and `/tmp` are in RAM, so what still reaches the card is housekeeping: systemd's clock file and the apt daily timer, a few kilobytes a minute. The rest is package installs and `git pull`.
 
 An image is pulled over SSH, with nothing to install on the Pi:
 
@@ -194,4 +203,3 @@ Scenario tests without hardware: `python tests/test_spa.py`. Run them before eve
 
 ## Open issues
 1. **Water level sensor bridged in hardware (temporary).** The electrodes are oxidized and have to be replaced by titanium bolts with a round head, both of the same metal. Until then the contact is bridged physically, so the input always reads "water present" and low-water protection is inactive. The config carries the real polarity, so removing the bridge restores the protection without a config change.
-2. **A rebuild from scratch is not scripted.** A replacement card can be written from the image, but setting up a fresh install by hand is undocumented. Idea: an install script in this repo that enables 1-wire and I2C, installs the packages, installs and enables the service, and puts the journal and `/tmp` in RAM, so a rebuild is: flash Raspberry Pi OS, clone, run the script, create the secrets file.
