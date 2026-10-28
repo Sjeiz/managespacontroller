@@ -8,24 +8,11 @@ ssh SjeizAdmin@spa-controller.iot.cheizoo.lan
 The repo lives in `/home/SjeizAdmin/python/managespacontroller/managespacontroller`.
 
 ## Logs
-The script runs as the systemd service `managespacontroller` and logs to the journal.
-Logged: commands from HA (`Message received`), state changes (`State:`), switched outputs (`Output`), refused switch-ons/offs (`Refused`), forced switch-ons by frost protection (`Force on`) and faults (`Fault:`). A status line (`Status:`) is logged at startup and every `status_log_secs`: state, outputs on, temperatures and inputs. The journal lives in RAM (journald `Storage=volatile`), so it starts empty after every reboot and keeps at most `RuntimeMaxUse`.
+The service logs to the journal: commands from HA (`Message received`), state changes (`State:`), switched outputs (`Output`), refusals (`Refused`), frost overrides (`Force on`), faults (`Fault:`), and a status line (`Status:`) at startup and every `status_log_secs`. The journal lives in RAM, so it starts empty after every reboot.
 
 ```bash
-# Follow live
-journalctl -u managespacontroller.service -f
-
-# A specific time window
-journalctl -u managespacontroller.service --since "2 hours ago" --until "1 hour ago" --no-pager
-
-# Who switched what: commands from HA, state changes, refusals and faults
-journalctl -u managespacontroller.service --since "24 hours ago" --no-pager | grep -E "Message received|State:|Refused|Fault:"
-
-# Service starts/stops and crashes
-journalctl -u managespacontroller.service --since "14 days ago" --no-pager | grep -E "Started|Stopped|exited|Traceback|Error"
-
-# Service status
-systemctl status managespacontroller
+journalctl -u managespacontroller.service -f          # follow
+journalctl -u managespacontroller.service --no-pager  # all of it, pipe into grep
 ```
 
 ## Secrets
@@ -40,39 +27,25 @@ chmod 600 managespacontroller.secrets.json
 ```
 
 ## Fresh install
-`install.sh` turns a bare Raspberry Pi OS into a controller: 1-Wire and I2C, the packages, the systemd service pointing at this clone, and the journal and `/tmp` in RAM. Every step checks before it changes anything, so running it again is harmless. Flash Raspberry Pi OS, clone this repo, then:
-
-```bash
-sudo ./install.sh
-```
-
-Create the secrets file (see [Secrets](#secrets)) and reboot.
+Flash Raspberry Pi OS, clone this repo, run `sudo ./install.sh`, create the secrets file and reboot. The script enables 1-Wire and I2C, installs the packages and the service, and puts the journal and `/tmp` in RAM. Running it again changes nothing.
 
 ## Deploy
-The Pi runs a git clone of this repo; deploy by pushing to GitHub and pulling on the Pi.
+The Pi runs a clone of this repo. Push to `origin/main`, then on the Pi:
 
-1. Commit and push to `origin/main`.
-2. On the Pi (see [Connect](#connect)):
-   ```bash
-   cd /home/SjeizAdmin/python/managespacontroller/managespacontroller && git pull
-   ```
-3. Activate the new code (this switches outputs, so pick the moment):
-   ```bash
-   sudo systemctl restart managespacontroller
-   ```
-4. Follow the log (see [Logs](#logs)): `journalctl -u managespacontroller.service -f`
+```bash
+cd /home/SjeizAdmin/python/managespacontroller/managespacontroller && git pull && sync
+sudo systemctl restart managespacontroller
+```
+
+The restart switches outputs, so pick the moment.
 
 ## SD card
-The controller writes no files of its own, and the journal and `/tmp` are in RAM, so what still reaches the card is housekeeping: systemd's clock file and the apt daily timer, a few kilobytes a minute. The rest is package installs and `git pull`.
-
-An image is pulled over SSH, with nothing to install on the Pi:
+The controller writes no files and the journal and `/tmp` are in RAM, so only housekeeping and `git pull` reach the card. Image it after `sudo fstrim -av`, which lets the free space compress away; `backup/` is in `.gitignore`.
 
 ```bash
 ssh spa-controller.iot.cheizoo.lan "sudo dd if=/dev/mmcblk0 bs=4M status=none | gzip -1" \
   > backup/spa-controller-$(date +%Y-%m-%d_%H%M).img.gz
 ```
-
-Run `sudo fstrim -av` first: freed blocks then compress away and the image shrinks to a fraction of the card. `backup/` is in `.gitignore`. The filesystem is mounted while it is read, so a restore replays the ext4 journal once.
 
 ## State machine
 
