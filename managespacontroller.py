@@ -256,12 +256,6 @@ def main():
         log.info("Spa Controller: script halted")
         display.message(["Program stopped!", "CTRL-C pressed."])
 
-    except Exception as error:
-        log.exception("Spa Controller: unexpected error")
-        line = error.__traceback__.tb_lineno if error.__traceback__ else "?"
-        text = f"Line{line}:{type(error).__name__}({error})"
-        display.message([text[i : i + 20] for i in range(0, 80, 20)])
-
     finally:
         # Leave the outputs in their initial state (heat pump on, rest off)
         for entity in entities.values():
