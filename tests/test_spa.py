@@ -211,6 +211,9 @@ d = Display(lambda: lcd, entities["spa_buzzer"], temps)
 no_buzzer = Display(lambda: FakeLCD(), None, temps)
 no_buzzer.update(spa, 1000.0)
 check("no buzzer in the config: the display runs without one", True)
+no_buzzer.beep()  # must not raise without a buzzer
+d.beep(times=2, seconds=0)
+check("beep: the buzzer pulses and ends up off again", not entities["spa_buzzer"].is_on)
 d.update(spa, 100.2)
 b1 = entities["spa_buzzer"].is_on
 d.update(spa, 101.2)

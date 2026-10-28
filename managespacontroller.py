@@ -39,6 +39,8 @@ from webserver import WebServer
 log = logging.getLogger("managespacontroller")
 
 FIRST_READINGS_TIMEOUT_SECS = 15
+# At most one traceback per minute, so a repeating error cannot fill the journal
+ERROR_LOG_SECS = 60
 # Holds the MQTT user and password; not in git (see README, Secrets)
 SECRETS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "managespacontroller.secrets.json")
 
@@ -213,38 +215,47 @@ def main():
     status_log_secs = float(spa_config.get("status_log_secs", 300))
     log.info(spa.status_line())
     status_logged_at = time.monotonic()
+    error_logged_at = 0.0
     try:
         while True:
-            while True:
-                try:
-                    event = events.get_nowait()
-                except queue.Empty:
-                    break
-                if event[0] == "reading":
-                    spa.handle_reading(event[1], event[2])
-                elif event[0] == "command":
-                    spa.handle_command(event[1], event[2], time.monotonic())
-                elif event[0] == "web_command":
-                    event[3].put(spa.handle_command(event[1], event[2], time.monotonic()))
-                elif event[0] == "connected":
-                    log.info("MQTT connected")
+            try:
+                while True:
+                    try:
+                        event = events.get_nowait()
+                    except queue.Empty:
+                        break
+                    if event[0] == "reading":
+                        spa.handle_reading(event[1], event[2])
+                    elif event[0] == "command":
+                        spa.handle_command(event[1], event[2], time.monotonic())
+                    elif event[0] == "web_command":
+                        event[3].put(spa.handle_command(event[1], event[2], time.monotonic()))
+                    elif event[0] == "connected":
+                        log.info("MQTT connected")
+                        publish_all(publisher, entities, extra, mqtt_config)
+
+                spa.tick(time.monotonic(), datetime.now())
+                display.update(spa, time.time())
+                if web is not None:
+                    web.update(spa.snapshot())
+
+                # A zero interval switches the periodic status line off; the one at startup stays
+                if status_log_secs > 0 and time.monotonic() - status_logged_at >= status_log_secs:
+                    status_logged_at = time.monotonic()
+                    log.info(spa.status_line())
+
+                if time.monotonic() - republished_at >= mqtt_config["republish_sec"]:
+                    republished_at = time.monotonic()
                     publish_all(publisher, entities, extra, mqtt_config)
 
-            spa.tick(time.monotonic(), datetime.now())
-            display.update(spa, time.time())
-            if web is not None:
-                web.update(spa.snapshot())
-
-            # A zero interval switches the periodic status line off; the one at startup stays
-            if status_log_secs > 0 and time.monotonic() - status_logged_at >= status_log_secs:
-                status_logged_at = time.monotonic()
-                log.info(spa.status_line())
-
-            if time.monotonic() - republished_at >= mqtt_config["republish_sec"]:
-                republished_at = time.monotonic()
-                publish_all(publisher, entities, extra, mqtt_config)
-
-            time.sleep(mqtt_config["sleep"])
+                time.sleep(mqtt_config["sleep"])
+            except Exception:
+                # A spa is better off with a hiccup than with a controller that quits
+                if time.monotonic() - error_logged_at >= ERROR_LOG_SECS:
+                    error_logged_at = time.monotonic()
+                    log.exception("Unexpected error, carrying on")
+                    display.beep()
+                time.sleep(mqtt_config["sleep"])
 
     except KeyboardInterrupt:
         log.info("Spa Controller: script halted")

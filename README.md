@@ -150,7 +150,7 @@ The keys speak for themselves in `managespacontroller.py.json`. Two things it do
 ### Code structure
 | Module | Contents |
 |---|---|
-| `managespacontroller.py` | `main()`: read config, build objects, main loop (service entry point). MQTT connects asynchronously and keeps retrying, so a broker that is down does not stop the controller. |
+| `managespacontroller.py` | `main()`: read config, build objects, main loop (service entry point). MQTT connects asynchronously and keeps retrying, so a broker that is down does not stop the controller. An unexpected error in the loop does not end it either: it is logged with a traceback and sounded as three beeps, at most once a minute, and the loop carries on. |
 | `entities.py` | Publisher (MQTT states, attributes and discovery), base class Entity (name, `unique_id`, topics, discovery payload), Output, Input, WaterLevelSensor (Input with power output), TemperatureSensor, TimestampSensor, Monitor, SessionSwitch, OperationSensor, StatusSensor, ResponseSensor |
 | `spa.py` | The state machine (state, transitions, lists, timers, rules), the fault interlock and frost protection; owns all entities; all commands go through it |
 | `webserver.py`, `webserver.html` | Web page: HTTP server in its own thread (status snapshot from the main loop, commands via the queue) and the page itself |

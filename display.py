@@ -52,6 +52,16 @@ class Display:
         except Exception as error:
             self._lost(error)
 
+    def beep(self, times=3, seconds=0.2):
+        """A short burst, for something the fault buzzer does not cover. Blocks."""
+        if self._buzzer is None:
+            return
+        for _ in range(times):
+            self._buzzer.write(True)
+            time.sleep(seconds)
+            self._buzzer.write(False)
+            time.sleep(seconds)
+
     def _connect(self):
         try:
             self._lcd = self._lcd_factory()
