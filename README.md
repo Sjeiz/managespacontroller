@@ -9,7 +9,7 @@ The repo lives in `/home/SjeizAdmin/python/managespacontroller/managespacontroll
 
 ## Logs
 The script runs as the systemd service `managespacontroller` and logs to the journal.
-Logged: commands from HA (`Message received`), state changes (`State:`), switched outputs (`Output`), refused switch-ons/offs (`Refused`), forced switch-ons by frost protection (`Force on`) and faults (`Fault:`). A status line (`Status:`) is logged at startup and every `status_log_secs`: state, outputs on, temperatures and inputs.
+Logged: commands from HA (`Message received`), state changes (`State:`), switched outputs (`Output`), refused switch-ons/offs (`Refused`), forced switch-ons by frost protection (`Force on`) and faults (`Fault:`). A status line (`Status:`) is logged at startup and every `status_log_secs`: state, outputs on, temperatures and inputs. The journal lives in RAM (journald `Storage=volatile`), so it starts empty after every reboot and keeps at most `RuntimeMaxUse`.
 
 ```bash
 # Follow live
@@ -52,6 +52,18 @@ The Pi runs a git clone of this repo; deploy by pushing to GitHub and pulling on
    sudo systemctl restart managespacontroller
    ```
 4. Follow the log (see [Logs](#logs)): `journalctl -u managespacontroller.service -f`
+
+## SD card
+Normal operation writes almost nothing to the card: the journal and `/tmp` are both in RAM and the controller writes no files of its own, which leaves package installs and `git pull`.
+
+An image is pulled over SSH, with nothing to install on the Pi:
+
+```bash
+ssh spa-controller.iot.cheizoo.lan "sudo dd if=/dev/mmcblk0 bs=4M status=none | gzip -1" \
+  > backup/spa-controller-$(date +%Y-%m-%d_%H%M).img.gz
+```
+
+Run `sudo fstrim -av` first: freed blocks then compress away and the image shrinks to a fraction of the card. `backup/` is in `.gitignore`. The filesystem is mounted while it is read, so a restore replays the ext4 journal once.
 
 ## State machine
 
@@ -182,4 +194,4 @@ Scenario tests without hardware: `python tests/test_spa.py`. Run them before eve
 
 ## Open issues
 1. **Water level sensor bridged in hardware (temporary).** The electrodes are oxidized and have to be replaced by titanium bolts with a round head, both of the same metal. Until then the contact is bridged physically, so the input always reads "water present" and low-water protection is inactive. The config carries the real polarity, so removing the bridge restores the protection without a config change.
-2. **Rebuild and SD card backup.** Not decided. Idea: an install script in this repo (enable 1-wire and I2C, install packages, install and enable the service), so a rebuild is: flash Raspberry Pi OS, clone, run the script, create the secrets file. The controller is screwed shut in the spa, so an image backup has to run over the network while the Pi is up: `image-backup` (RonR's image-utils) to a share, or a one-off `dd` over SSH. Open question: is there a network share the Pi can write to?
+2. **A rebuild from scratch is not scripted.** A replacement card can be written from the image, but setting up a fresh install by hand is undocumented. Idea: an install script in this repo that enables 1-wire and I2C, installs the packages, installs and enables the service, and puts the journal and `/tmp` in RAM, so a rebuild is: flash Raspberry Pi OS, clone, run the script, create the secrets file.
