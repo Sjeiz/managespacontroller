@@ -50,13 +50,21 @@ def str2bool(value):
 def load_config():
     with open(__file__ + ".json", "r", encoding="utf-8") as file:
         config = json.load(file)
+    config["mqtt"].update(read_secrets())
+    return config
+
+
+def read_secrets():
+    """The MQTT credentials. Missing or unreadable is not fatal: without them the
+    controller runs on, reachable through the web page, and keeps retrying MQTT."""
     try:
         with open(SECRETS_FILE, "r", encoding="utf-8") as file:
-            secrets = json.load(file)
+            return json.load(file).get("mqtt", {})
     except FileNotFoundError:
-        sys.exit(f"Secrets file missing: {SECRETS_FILE} (see README, Secrets)")
-    config["mqtt"].update(secrets.get("mqtt", {}))
-    return config
+        log.error("Secrets file missing: %s, running without MQTT (see README, Secrets)", SECRETS_FILE)
+    except (ValueError, OSError) as error:
+        log.error("Secrets file unusable: %s (%s), running without MQTT", SECRETS_FILE, error)
+    return {}
 
 
 def build_entities(config):
@@ -87,7 +95,8 @@ def build_entities(config):
 
 def create_mqtt_client(mqtt_config, events):
     client = MQTT.Client(protocol=MQTT.MQTTv5)
-    client.username_pw_set(username=mqtt_config["user"], password=mqtt_config["password"])
+    if mqtt_config.get("user"):
+        client.username_pw_set(username=mqtt_config["user"], password=mqtt_config.get("password"))
     client.will_set(mqtt_config["statustopic"], mqtt_config["statusoffline"], qos=mqtt_config["qos"])
 
     # Callbacks run in the paho thread: they only put events in the queue
@@ -138,14 +147,13 @@ def wait_for_first_readings(events, entities, pending):
 
 
 def main():
+    # Logging first, so anything the config itself complains about is logged like the rest
+    logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
+    log.info("Spa Controller: script started")
     config = load_config()
     mqtt_config = config["mqtt"]
-    logging.basicConfig(
-        level=logging.DEBUG if str2bool(mqtt_config.get("debug", "false")) else logging.INFO,
-        format="%(message)s",
-        stream=sys.stdout,
-    )
-    log.info("Spa Controller: script started")
+    if str2bool(mqtt_config.get("debug", "false")):
+        logging.getLogger().setLevel(logging.DEBUG)
 
     os.system("modprobe w1-gpio")
     os.system("modprobe w1-therm")
@@ -173,7 +181,7 @@ def main():
     temperature_sensors = [e for e in entities.values() if isinstance(e, TemperatureSensor)]
     display = Display(
         lambda: liquidcrystal_i2c.LiquidCrystal_I2C(0x27, 1, numlines=4),
-        entities["spa_buzzer"],
+        entities.get("spa_buzzer"),  # optional: the display runs without it
         temperature_sensors,
     )
     display.message(["Program started!"])

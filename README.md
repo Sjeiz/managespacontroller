@@ -16,7 +16,7 @@ journalctl -u managespacontroller.service --no-pager  # all of it, pipe into gre
 ```
 
 ## Secrets
-The MQTT user and password are not in git. They live on the Pi in `managespacontroller.secrets.json`, next to the script (listed in `.gitignore`). Without it the controller stops with an error. Create it once:
+The MQTT user and password are not in git. They live on the Pi in `managespacontroller.secrets.json`, next to the script (listed in `.gitignore`). Without the file, or with a damaged one, the controller runs on and logs it: no HA, but the web page still works. Create it once:
 
 ```bash
 cd /home/SjeizAdmin/python/managespacontroller/managespacontroller

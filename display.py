@@ -92,7 +92,9 @@ class Display:
             self._print_justified(line, sensor.name + ":", value)
 
     def _update_buzzer(self, fault, now):
-        # Pulse 1 s on, 1 s off; never continuously on
+        # Pulse 1 s on, 1 s off; never continuously on. The buzzer is optional.
+        if self._buzzer is None:
+            return
         on = fault and int(now) % 2 == 0
         if on != self._buzzer.is_on:
             self._buzzer.write(on)

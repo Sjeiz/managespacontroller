@@ -207,6 +207,10 @@ class FakeLCD:
 lcd = FakeLCD()
 temps = [entities[u] for u in ("spa_temp_1", "spa_temp_2", "spa_temp_3")]
 d = Display(lambda: lcd, entities["spa_buzzer"], temps)
+
+no_buzzer = Display(lambda: FakeLCD(), None, temps)
+no_buzzer.update(spa, 1000.0)
+check("no buzzer in the config: the display runs without one", True)
 d.update(spa, 100.2)
 b1 = entities["spa_buzzer"].is_on
 d.update(spa, 101.2)
@@ -408,12 +412,14 @@ web.stop()
 real_secrets_file = mc.SECRETS_FILE
 with tempfile.TemporaryDirectory() as tmp:
     mc.SECRETS_FILE = os.path.join(tmp, "managespacontroller.secrets.json")
-    try:
-        mc.load_config()
-        ok = False
-    except SystemExit as error:
-        ok = "Secrets file missing" in str(error)
-    check("secrets file missing: controller stops with a clear message", ok)
+    loaded = mc.load_config()
+    check("secrets file missing: controller carries on without MQTT credentials",
+          "user" not in loaded["mqtt"] and "server" in loaded["mqtt"])
+    with open(mc.SECRETS_FILE, "w", encoding="utf-8") as file:
+        file.write("{not json")
+    loaded = mc.load_config()
+    check("secrets file with a syntax error: controller carries on as well",
+          "user" not in loaded["mqtt"] and "server" in loaded["mqtt"])
     with open(mc.SECRETS_FILE, "w", encoding="utf-8") as file:
         file.write('{"mqtt": {"user": "u", "password": "p"}}')
     loaded = mc.load_config()
