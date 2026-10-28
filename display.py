@@ -25,6 +25,7 @@ class Display:
         self._line_count = lines
         self._lcd = None
         self._reconnect_at = 0.0
+        self._error = None
         self._connect()
 
     def update(self, spa, now):
@@ -51,6 +52,10 @@ class Display:
                 self._print(line, lines[line] if line < len(lines) else "")
         except Exception as error:
             self._lost(error)
+
+    def error(self, text):
+        """Put an error on the screen and keep it there, in Standby too, until a restart."""
+        self._error = text
 
     def beep(self, times=3, seconds=0.2):
         """A short burst, for something the fault buzzer does not cover. Blocks."""
@@ -83,14 +88,17 @@ class Display:
         self._reconnect_at = time.monotonic() + RECONNECT_SECS
 
     def _render(self, spa, now):
-        if spa.state == STANDBY and not spa.fault:
+        if spa.state == STANDBY and not spa.fault and self._error is None:
             self._hide()
             return
         self._show()
         # A force_on monitor (frost) is reported in front of the active outputs
         forced = spa.forced_warnings()
+        # A fault comes first: that is the one asking you to do something to the spa
         if spa.fault:
             status = "WARNING: " + " ".join(spa.warnings())
+        elif self._error:
+            status = self._error
         else:
             active = [o.short_name for o in spa.outputs.values() if o.is_on and o.short_name]
             status = " ".join([w.upper() for w in forced] + active)

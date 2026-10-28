@@ -248,9 +248,11 @@ def main():
                     publish_all(publisher, entities, extra, mqtt_config)
 
                 time.sleep(mqtt_config["sleep"])
-            except Exception:
+            except Exception as error:
                 # A spa is better off with a hiccup than with a controller that quits
                 log.exception("Unexpected error, carrying on")
+                line = error.__traceback__.tb_lineno if error.__traceback__ else "?"
+                display.error(f"ERR {type(error).__name__} L{line}")
                 display.beep()
                 time.sleep(mqtt_config["sleep"])
 
