@@ -39,8 +39,6 @@ from webserver import WebServer
 log = logging.getLogger("managespacontroller")
 
 FIRST_READINGS_TIMEOUT_SECS = 15
-# At most one traceback per minute, so a repeating error cannot fill the journal
-ERROR_LOG_SECS = 60
 # Holds the MQTT user and password; not in git (see README, Secrets)
 SECRETS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "managespacontroller.secrets.json")
 
@@ -215,7 +213,6 @@ def main():
     status_log_secs = float(spa_config.get("status_log_secs", 300))
     log.info(spa.status_line())
     status_logged_at = time.monotonic()
-    error_logged_at = 0.0
     try:
         while True:
             try:
@@ -251,10 +248,8 @@ def main():
                 time.sleep(mqtt_config["sleep"])
             except Exception:
                 # A spa is better off with a hiccup than with a controller that quits
-                if time.monotonic() - error_logged_at >= ERROR_LOG_SECS:
-                    error_logged_at = time.monotonic()
-                    log.exception("Unexpected error, carrying on")
-                    display.beep()
+                log.exception("Unexpected error, carrying on")
+                display.beep()
                 time.sleep(mqtt_config["sleep"])
 
     except KeyboardInterrupt:
