@@ -8,7 +8,7 @@ ssh SjeizAdmin@spa-controller.iot.cheizoo.lan
 The repo lives in `/home/SjeizAdmin/python/managespacontroller/managespacontroller`.
 
 ## Logs
-The service logs to the journal: commands from HA (`Message received`), state changes (`State:`), switched outputs (`Output`), refusals (`Refused`), frost overrides (`Force on`), faults (`Fault:`), and a status line (`Status:`) at startup and every `status_log_secs`. The journal lives in RAM, so it starts empty after every reboot.
+The service logs to the journal: commands from HA (`Message received`), state changes (`State:`), switched outputs (`Output`), refusals (`Refused`), frost overrides (`Force on`), faults (`Fault:`), and a status line (`Status:`) at startup and every `status_log_secs`, or only at startup when that is 0. The journal lives in RAM, so it starts empty after every reboot.
 
 ```bash
 journalctl -u managespacontroller.service -f          # follow
@@ -143,13 +143,9 @@ Between measurements the last reading is kept. The first measurement runs at sta
 - All of them put their results in one queue. Only the main loop reads the queue, touches the Spa and switches outputs; the one exception is the water level sensor, which switches its own power output from its thread (no other code uses that pin).
 
 ### Config
-- Section `disabled`: entity blocks moved here are not read (not set up, not announced to HA); outputs still listed in the session/maintenance lists are skipped with a log warning. Move a block back to re-enable it.
-- Per output: pin, on/off level, `initial_state`, HA fields (`unique_id`, topics). Outputs with a `command_topic` are spa outputs; outputs without one (buzzer, water level power) are internal.
-- Per sensor (temperature and water level): measuring interval.
-- Water level sensor: `power` (the output that powers it) and settle time.
-- Per monitor (order = Spa Status priority): `warning` (Spa Status value), limit and, for value checks, hysteresis; optional `force_on` (output kept on while active) and `unknown_active` (an unknown value counts as true).
-- Section `web`: port of the web page.
-- Section `spa`: Session switch, `spa_operation`, Spa Status and Spa Response sensors (HA fields), circulation output, session list, maintenance list (lists of steps; outputs in one step switch on together), stagger delay, maintenance times (list of clock times), flush time, circulation duration, status log interval (0 switches the periodic status line off; the one at startup stays).
+The keys speak for themselves in `managespacontroller.py.json`. Two things it does not show:
+- Section `disabled`: entity blocks moved here are not read at all, and an output still named in a list is skipped with a log warning. Move a block back to re-enable it.
+- An output with a `command_topic` is a spa output; one without (buzzer, water level power) is internal.
 
 ### Code structure
 | Module | Contents |
