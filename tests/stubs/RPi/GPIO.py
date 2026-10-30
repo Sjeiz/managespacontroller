@@ -2,6 +2,8 @@
 
 Outputs are recorded in `pins` (pin -> level); inputs are read from `inputs`
 (pin -> level, default 1). Tests set `inputs[pin]` to simulate a sensor.
+Every write is appended to `writes` as (pin, level), so a test can show that an
+output does not change level when it is already in the requested state.
 """
 
 BCM = "BCM"
@@ -13,6 +15,7 @@ PUD_OFF = "OFF"
 
 pins = {}
 inputs = {}
+writes = []
 
 
 def setmode(mode):
@@ -30,6 +33,7 @@ def setup(pin, direction, initial=None, pull_up_down=None):
 
 def output(pin, value):
     pins[pin] = value
+    writes.append((pin, value))
 
 
 def input(pin):

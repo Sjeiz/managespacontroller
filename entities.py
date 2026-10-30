@@ -111,6 +111,11 @@ class Output(BinaryEntity):
         self.gpio_off = int(config.get("gpio_off", 0))
         self.initial_on = config.get("initial_state", "off") == "on"
         self.short_name = config.get("short_name")
+        # Which runs start this output: a session, and/or a maintenance run for this many
+        # seconds. Without either the state machine never starts or stops it.
+        self.session = bool(config.get("session", False))
+        maintenance = config.get("maintenance")
+        self.maintenance_secs = None if maintenance is None else float(maintenance)
 
     @property
     def controllable(self):

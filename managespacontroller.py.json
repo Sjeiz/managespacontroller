@@ -40,6 +40,8 @@
 		"spa_circulation": {
 			"name": "Spa Circulation Pump",
 			"short_name": "C",
+			"session": true,
+			"maintenance": 3600,
 			"direction": "output",
 			"pin": 27,
 			"initial_state": "off",
@@ -55,6 +57,8 @@
 		"spa_pump1": {
 			"name": "Spa Pump #1",
 			"short_name": "1",
+			"session": true,
+			"maintenance": 30,
 			"direction": "output",
 			"pin": 22,
 			"initial_state": "off",
@@ -70,6 +74,8 @@
 		"spa_pump2": {
 			"name": "Spa Pump #2",
 			"short_name": "2",
+			"session": true,
+			"maintenance": 30,
 			"direction": "output",
 			"pin": 5,
 			"initial_state": "off",
@@ -85,6 +91,8 @@
 		"spa_pump3": {
 			"name": "Spa Pump #3",
 			"short_name": "3",
+			"session": true,
+			"maintenance": 30,
 			"direction": "output",
 			"pin": 13,
 			"initial_state": "off",
@@ -100,6 +108,7 @@
 		"spa_lights": {
 			"name": "Spa Lights",
 			"short_name": "L",
+			"session": true,
 			"direction": "output",
 			"pin": 19,
 			"initial_state": "off",
@@ -115,6 +124,7 @@
 		"spa_blower": {
 			"name": "Spa Blower",
 			"short_name": "B",
+			"maintenance": 30,
 			"direction": "output",
 			"pin": 6,
 			"initial_state": "off",
@@ -264,47 +274,12 @@
 			"config_topic": "homeassistant/sensor/spa-controller/spa_response/config",
 			"state_topic": "spa-controller/spa_response"
 		},
-		"circulation": "spa_circulation",
-		"session_list": [
-			[
-				"spa_lights",
-				"spa_circulation"
-			],
-			[
-				"spa_pump1"
-			],
-			[
-				"spa_pump2"
-			],
-			[
-				"spa_pump3"
-			]
-		],
-		"maintenance_list": [
-			[
-				"spa_circulation"
-			],
-			[
-				"spa_pump1"
-			],
-			[
-				"spa_pump2"
-			],
-			[
-				"spa_pump3"
-			],
-			[
-				"spa_blower"
-			]
-		],
 		"stagger_secs": 1,
 		"maintenance_times": [
 			"06:00",
 			"14:00",
 			"22:00"
 		],
-		"flush_secs": 30,
-		"circulation_secs": 3600,
 		"status_log_secs": 60
 	},
 	"web": {

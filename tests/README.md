@@ -44,7 +44,7 @@ The checks form **one continuous scenario**: each check starts from the state th
 
 | Stub | Location | Behaviour |
 |---|---|---|
-| `RPi.GPIO` | `tests/stubs/RPi/GPIO.py` | Records outputs in `GPIO.pins` (pin → level). Inputs are read from `GPIO.inputs` (pin → level, default `1`). A test sets e.g. `GPIO.inputs[23] = 1` to simulate low water. |
+| `RPi.GPIO` | `tests/stubs/RPi/GPIO.py` | Records outputs in `GPIO.pins` (pin → level) and every write in `GPIO.writes` as (pin, level), so a test can show that nothing changes level. Inputs are read from `GPIO.inputs` (pin → level, default `1`). A test sets e.g. `GPIO.inputs[23] = 1` to simulate low water. |
 | `paho.mqtt` | Created in `test_spa.py` | Empty modules, only so the controller modules can be imported. |
 | `smbus` | Created in `test_spa.py` | Empty module, only so `liquidcrystal_i2c` can be imported. |
 
@@ -52,10 +52,10 @@ The checks form **one continuous scenario**: each check starts from the state th
 
 | Area | Checks |
 |---|---|
-| **Startup** | Only the heat pump is on (`initial_state`); the pin levels right after `setup()` already match `initial_state`, so no output changes level before the controller starts; pin levels for the relay board and for the heat pump channel on its break contact; buzzer and water level power are internal outputs. |
-| **Session** | A manually switched blower is left alone when the session starts; lights and circulation switch on together; pumps follow one by one after the stagger delay; Session switch and `spa_operation` follow the state; a maintenance time during a session does nothing; manual control during a session; Session switch off puts every output back to its `initial_state`, including a heat pump that was switched off by hand. |
+| **Startup** | Only the heat pump is on (`initial_state`); the pin levels right after `setup()` already match `initial_state`, and starting the controller writes to no pin at all, so no relay changes level; pin levels for the relay board and for the heat pump channel on its break contact; buzzer and water level power are internal outputs. |
+| **Session** | A manually switched blower is left alone when the session starts; the participants switch on one per stagger delay, the first at once and the rest after their delay; Session switch and `spa_operation` follow the state; a maintenance time during a session does nothing; manual control during a session; Session switch off switches every spa output off, the hand-switched blower and the heat pump included. |
 | **Manual reporting** | `Manual` only when an output that is off by default is on; switching the heat pump off stays `Standby`; manual control in Standby switches only that output. |
-| **Maintenance** | Starts at a configured clock time with circulation and without lights; pumps and blower flush; after the flush time only circulation (and the heat pump) remain; the same minute does not retrigger; ends after the circulation duration; the Session switch during maintenance turns it into a session (blower off, lights on, timers cancelled). |
+| **Maintenance** | Starts at a configured clock time with the circulation output and without lights; the Session switch stays off while it runs; pumps and blower flush and each goes off when its own run time is up, leaving the circulation output running; the run does not touch a heat pump the user switched off, which is still off when the run ends; the same minute does not retrigger; switching the Session switch on hands the run over to a session (blower off at once, session outputs on, run times gone). |
 | **Fault interlock** | Water temperature above 40 °C: everything off including the heat pump, `Error`; Session switch and manual control refused; hysteresis (still active at 39.8 °C, cleared at 39.4 °C, 40.0 °C does not trip); a maintenance time during a fault does nothing; clearing restores `initial_state`. |
 | **Water level sensor** | The power output is switched on only while measuring and is off afterwards; low water gives a fault with warning `WaterLow`. |
 | **Buzzer and LCD** | A display without a buzzer does not raise, and `beep()` pulses and leaves it off; the buzzer pulses 1 s on / 1 s off during a fault and is off afterwards; LCD line 0 shows the warning, line 1 the water temperature. |

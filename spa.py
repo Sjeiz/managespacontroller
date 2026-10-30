@@ -34,48 +34,30 @@ class Spa:
         }
         self.monitors = [entity for entity in entities.values() if isinstance(entity, Monitor)]
 
-        self.session_list = [list(step) for step in config["session_list"]]
-        self.maintenance_list = [list(step) for step in config["maintenance_list"]]
+        # Each output says which runs start it, so the state machine holds no lists.
+        # The order is that of the outputs in the config; only the staggering matters.
+        self.session_outputs = [uid for uid, output in self.outputs.items() if output.session]
+        self.maintenance_outputs = [
+            uid for uid, output in self.outputs.items() if output.maintenance_secs is not None
+        ]
         self.stagger_secs = float(config.get("stagger_secs", 1))
         self.maintenance_times = list(config.get("maintenance_times", []))
-        self.flush_secs = float(config.get("flush_secs", 30))
-        self.circulation_secs = float(config.get("circulation_secs", 3600))
-        self.circulation = config["circulation"]
         self._validate()
 
         self.state = STANDBY
         self.fault = False
-        self._sequence = []
-        self._next_step_at = 0.0
-        self._flush_until = None
-        self._circulation_until = None
+        self._starting = []  # outputs still to be switched on, one per stagger delay
+        self._next_start_at = 0.0
+        self._until = {}  # uid -> monotonic deadline, while a maintenance run drives it
         self._last_maintenance_slot = None
         self._command_target = None  # target of the command being handled, for refusal reporting
         self._refusal = None
 
     def _validate(self):
-        # A list may name an output the config does not define; skip it instead of failing
-        listed = {uid for step in self.session_list + self.maintenance_list for uid in step}
-        skipped = sorted(uid for uid in listed if uid not in self.outputs)
-        if skipped:
-            log.warning("Spa list skips unknown outputs: %s", skipped)
-            self.session_list = self._known_steps(self.session_list)
-            self.maintenance_list = self._known_steps(self.maintenance_list)
-        names = {self.circulation}
-        names.update(monitor.force_on for monitor in self.monitors if monitor.force_on)
+        names = {monitor.force_on for monitor in self.monitors if monitor.force_on}
         unknown = sorted(name for name in names if name not in self.outputs)
         if unknown:
             raise ValueError(f"Spa config refers to unknown outputs: {unknown}")
-
-    def _known_steps(self, steps):
-        known = [[uid for uid in step if uid in self.outputs] for step in steps]
-        return [step for step in known if step]
-
-    # ---- lists ---------------------------------------------------------------
-
-    @staticmethod
-    def _names(steps):
-        return [uid for step in steps for uid in step]
 
     # ---- startup, commands, readings -----------------------------------------
 
@@ -97,8 +79,8 @@ class Spa:
         if target == self.session_switch.unique_id:
             if payload == self.session_switch.payload_on:
                 self._enter_session(now)
-            elif self.state in (SESSION, MAINTENANCE):
-                self._to_standby()
+            elif self.state == SESSION:
+                self._end_session()
             self._publish_state()
         elif target in self.outputs:
             self.switch(target, payload == self.outputs[target].payload_on)
@@ -126,8 +108,8 @@ class Spa:
         self._update_fault()
         self._apply_force_on()
         self._check_maintenance_time(now, wallclock)
-        self._advance_sequence(now)
-        self._check_maintenance_timers(now)
+        self._advance_start(now)
+        self._check_deadlines(now)
 
     def _evaluate_monitors(self):
         # Config order matters: a monitor may check monitors defined before it,
@@ -161,7 +143,7 @@ class Spa:
         warnings = [m.warning for m in self._problem_monitors() if m.is_on and m.warning]
         log.warning("Fault: active (%s)", ", ".join(warnings) or "problem")
         self.fault = True
-        self._stop_lists()
+        self._abandon_run()
         self._set_state(STANDBY)
         for uid in self.outputs:
             self.switch(uid, False)
@@ -222,6 +204,8 @@ class Spa:
         return False
 
     def _apply_initial_states(self):
+        """The stand without a run: controller start, a cleared fault. An output already
+        at its initial_state is not written, so no relay changes level."""
         for output in self.outputs.values():
             self.switch(output.unique_id, output.initial_on)
 
@@ -239,54 +223,62 @@ class Spa:
             return
         if self.state == SESSION:
             return
-        # Coming from Standby there is nothing of ours to clean up, so a manually
-        # switched output stays as the user left it
-        leaving = self.maintenance_list if self.state == MAINTENANCE else []
-        self._cancel_timers()
+        if self.state == MAINTENANCE:
+            self._stop_run()  # the maintenance run ends here; what it drove goes off
         self._set_state(SESSION)
-        self._start_list(self.session_list, leaving, now)
+        self._start(self.session_outputs, now)
 
     def _enter_maintenance(self, now):
         self._set_state(MAINTENANCE)
-        self._flush_until = None  # starts when the list has been switched on
-        self._circulation_until = now + self.circulation_secs
-        self._start_list(self.maintenance_list, [], now)  # only ever entered from Standby
+        self._start(self.maintenance_outputs, now)
         self._publish_state()
 
-    def _to_standby(self):
-        self._stop_lists()
-        self._apply_initial_states()
+    def _end_session(self):
+        """The user ended the session, so the spa goes quiet: every output off."""
+        self._abandon_run()
+        for uid in self.outputs:
+            self.switch(uid, False)
         self._set_state(STANDBY)
 
-    def _stop_lists(self):
-        self._cancel_timers()
-        self._sequence = []
+    def _stop_run(self):
+        """Stop what the running run drives and forget its schedule."""
+        self._starting = []
+        for uid in list(self._until):
+            del self._until[uid]
+            self.switch(uid, False)
 
-    def _cancel_timers(self):
-        self._flush_until = None
-        self._circulation_until = None
+    def _abandon_run(self):
+        """Forget the schedule without switching; the caller switches the outputs itself."""
+        self._starting = []
+        self._until = {}
 
-    def _start_list(self, steps, other_steps, now):
-        keep = set(self._names(steps))
-        for uid in self._names(other_steps):
-            if uid not in keep:
-                self.switch(uid, False)
-        self._sequence = [list(step) for step in steps]
-        self._next_step_at = now
-        self._advance_sequence(now)
+    def _start(self, uids, now):
+        self._starting = list(uids)
+        self._next_start_at = now
+        self._advance_start(now)
 
-    def _advance_sequence(self, now):
-        while self._sequence and now >= self._next_step_at:
-            step = self._sequence.pop(0)
-            switched = False
-            for uid in step:
-                if not self.outputs[uid].is_on and self.switch(uid, True):
-                    switched = True
-            if switched:
+    def _advance_start(self, now):
+        """Switch on the outputs of the run that is starting, one per stagger delay."""
+        while self._starting and now >= self._next_start_at:
+            uid = self._starting.pop(0)
+            output = self.outputs[uid]
+            if self.state == MAINTENANCE and output.maintenance_secs is not None:
+                self._until[uid] = now + output.maintenance_secs
+            if not output.is_on and self.switch(uid, True):
                 # Stagger motor starts to stay under the breaker's inrush limit
-                self._next_step_at = now + self.stagger_secs
-            if not self._sequence and self.state == MAINTENANCE and self._flush_until is None:
-                self._flush_until = now + self.flush_secs
+                self._next_start_at = now + self.stagger_secs
+
+    def _check_deadlines(self, now):
+        """Every participant of a maintenance run goes off when its own time is up. Once
+        they all have, the run is over and there is nothing left to switch off."""
+        if self.state != MAINTENANCE:
+            return
+        for uid in [uid for uid, until in self._until.items() if now >= until]:
+            del self._until[uid]
+            self.switch(uid, False)
+        if not self._starting and not self._until:
+            self._set_state(STANDBY)
+            self._publish_state()
 
     def _check_maintenance_time(self, now, wallclock):
         slot = wallclock.strftime("%Y-%m-%d %H:%M")
@@ -295,18 +287,6 @@ class Spa:
         self._last_maintenance_slot = slot
         if self.state == STANDBY and not self.fault:
             self._enter_maintenance(now)
-
-    def _check_maintenance_timers(self, now):
-        if self.state != MAINTENANCE:
-            return
-        if self._flush_until is not None and now >= self._flush_until:
-            self._flush_until = float("inf")  # done; don't flush again in this run
-            for uid in self._names(self.maintenance_list):
-                if uid != self.circulation:
-                    self.switch(uid, False)
-        if self._circulation_until is not None and now >= self._circulation_until:
-            self._to_standby()
-            self._publish_state()
 
     # ---- reporting -----------------------------------------------------------
 
@@ -364,7 +344,9 @@ class Spa:
             self._publisher.state(self.operation_sensor)
 
     def _publish_state(self):
-        self.session_switch.is_on = self.state in (SESSION, MAINTENANCE)
+        # The switch is the user's session, not a display of the machine: a maintenance
+        # run leaves it off, so switching it on hands that run over to a session.
+        self.session_switch.is_on = self.state == SESSION
         self._publisher.state(self.session_switch)
         self.operation_sensor.value = self.operation()
         self._publisher.state(self.operation_sensor)

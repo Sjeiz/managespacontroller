@@ -94,20 +94,22 @@ check("start: level power pin at off-level (active low = 1)", GPIO.pins[26] == 1
 check("setup: heat pump pin already high, so it does not drop out before start",
       pins_after_setup[17] == 1 and pins_after_setup[22] == 1 and pins_after_setup[26] == 1)
 check("start: buzzer and level power are not spa outputs", "spa_buzzer" not in O and "spa_water_level_power" not in O)
+check("start: not one output is written, so no relay changes level", GPIO.writes == [])
 
 t = 1000.0
 spa.handle_command("spa_blower", "on", t - 1)
 spa.handle_command("spa_session", "on", t)
 check("session from Standby: a manually switched blower is left alone", "spa_blower" in on())
 spa.handle_command("spa_blower", "off", t)
-check("session: lights + circulation at once", on() == ["spa_circulation", "spa_heatpump", "spa_lights"])
+check("session: the first session output at once", on() == ["spa_circulation", "spa_heatpump"])
 spa.tick(t + 0.5, W)
-check("session: no pump before stagger delay", "spa_pump1" not in on())
+check("session: no second output before the stagger delay", "spa_pump1" not in on())
 spa.tick(t + 1.0, W)
 check("session: pump1 after 1 s, pump2 not yet", "spa_pump1" in on() and "spa_pump2" not in on())
-for i in range(2, 5):
+for i in range(2, 6):
     spa.tick(t + i, W)
-check("session: pumps 1-3 on after 3 s, no blower", all(f"spa_pump{i}" in on() for i in range(1, 4)) and "spa_blower" not in on())
+check("session: all session outputs on after 4 s, no blower",
+      all(f"spa_pump{i}" in on() for i in range(1, 4)) and "spa_lights" in on() and "spa_blower" not in on())
 check("session: switch on, operation Active", spa.session_switch.is_on and spa.operation_sensor.value == "Active")
 
 spa.tick(t + 10, datetime(2026, 10, 7, 14, 0))
@@ -118,7 +120,9 @@ check("manual blower on during session", "spa_blower" in on())
 spa.handle_command("spa_heatpump", "off", t + 12)
 
 spa.handle_command("spa_session", "off", t + 20)
-check("session off: every output back to its initial state, Standby", on() == ["spa_heatpump"] and spa.state == "Standby" and not spa.session_switch.is_on)
+check("session off: every output off, blower and heat pump included, Standby",
+      on() == [] and spa.state == "Standby" and not spa.session_switch.is_on)
+spa.handle_command("spa_heatpump", "on", t + 21)  # as the user leaves it between sessions
 
 spa.handle_command("spa_circulation", "on", t + 30)
 check("Spa Response: OK for a successful command", response.state == "spa_circulation on: OK")
@@ -138,18 +142,24 @@ check("manual pump in Standby: only that pump", on() == ["spa_heatpump", "spa_pu
 check("manual pump in Standby: reported Manual", spa.operation_sensor.value == "Manual" and "Status: Manual" in spa.status_line())
 
 t = 5000.0
+spa.handle_command("spa_pump2", "off", t - 2)
+spa.handle_command("spa_heatpump", "off", t - 1)  # the user switches the heat pump off
 spa.tick(t, datetime(2026, 10, 7, 6, 0, 5))
-check("maintenance at 06:00: circulation, no lights", spa.state == "Maintenance" and "spa_circulation" in on() and "spa_lights" not in on())
-check("maintenance: switch on, operation Maintenance", spa.session_switch.is_on and spa.operation_sensor.value == "Maintenance")
+check("maintenance at 06:00: circulation first, no lights", spa.state == "Maintenance" and on() == ["spa_circulation"])
+check("maintenance: the session switch stays off, operation Maintenance",
+      not spa.session_switch.is_on and spa.operation_sensor.value == "Maintenance")
 for i in range(1, 7):
     spa.tick(t + i, datetime(2026, 10, 7, 6, 0, 10))
 check("maintenance: pumps + blower on", all(f"spa_pump{i}" in on() for i in range(1, 4)) and "spa_blower" in on())
-spa.tick(t + 60, datetime(2026, 10, 7, 6, 1))
-check("maintenance: after flush only circulation + heat pump", on() == ["spa_circulation", "spa_heatpump"])
+check("maintenance: the run does not touch the heat pump", "spa_heatpump" not in on())
+spa.tick(t + 40, datetime(2026, 10, 7, 6, 1))
+check("maintenance: every participant off after its own 30 s, circulation runs on", on() == ["spa_circulation"])
 spa.tick(t + 120, datetime(2026, 10, 7, 6, 0, 50))
 check("maintenance: same minute does not retrigger", spa.state == "Maintenance")
-spa.tick(t + 3601, datetime(2026, 10, 7, 7, 0))
-check("maintenance: circulation duration -> Standby", spa.state == "Standby" and on() == ["spa_heatpump"])
+spa.tick(t + 3602, datetime(2026, 10, 7, 7, 0))
+check("maintenance done: Standby, heat pump still off as the user left it",
+      spa.state == "Standby" and on() == [])
+spa.handle_command("spa_heatpump", "on", t + 3603)
 
 t = 9000.0
 spa.tick(t, datetime(2026, 10, 7, 14, 0))
@@ -157,9 +167,13 @@ for i in range(1, 7):
     spa.tick(t + i, datetime(2026, 10, 7, 14, 0, 10))
 check("maintenance 2: blower on", "spa_blower" in on())
 spa.handle_command("spa_session", "on", t + 7)
-check("maintenance -> session: blower off, lights on", "spa_blower" not in on() and "spa_lights" in on() and spa.state == "Session")
+check("maintenance -> session: the blower goes off at once", "spa_blower" not in on() and spa.state == "Session")
+for i in range(8, 13):
+    spa.tick(t + i, datetime(2026, 10, 7, 14, 0, 20))
+check("maintenance -> session: session outputs on, lights included", "spa_lights" in on() and "spa_pump1" in on())
 spa.tick(t + 4000, datetime(2026, 10, 7, 15, 0))
-check("maintenance -> session: timers cancelled", spa.state == "Session" and "spa_pump1" in on())
+check("maintenance -> session: the run times are gone, nothing switches itself off",
+      spa.state == "Session" and "spa_pump1" in on())
 
 spa.handle_reading("spa_temp_1", 40.1)
 spa.tick(t + 4001, datetime(2026, 10, 7, 15, 1))
