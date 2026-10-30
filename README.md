@@ -138,7 +138,7 @@ Between measurements the last reading is kept. The first measurement runs at sta
 - All of them put their results in one queue. Only the main loop reads the queue, touches the Spa and switches outputs; the one exception is the water level sensor, which switches its own power output from its thread (no other code uses that pin).
 
 ### Config
-The keys speak for themselves in `managespacontroller.py.json`. The one thing it does not show: an output with a `command_topic` is a spa output, one without (buzzer, water level power) is internal.
+The keys speak for themselves in `managespacontroller.py.json`. The one thing it does not show: an output with a `command_topic` is a spa output, one without (buzzer, water level power) is internal. Without a `display` section there is no LCD and no buzzer; the `display` section names the output that is the buzzer, like the water level sensor names its power output.
 
 ### Code structure
 | Module | Contents |

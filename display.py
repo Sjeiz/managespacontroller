@@ -17,7 +17,8 @@ RECONNECT_SECS = 60
 
 class Display:
     def __init__(self, lcd_factory, buzzer, temperature_sensors, columns=20, lines=4):
-        """lcd_factory: callable that creates and initialises the LCD (may raise)."""
+        """lcd_factory: callable that creates and initialises the LCD (may raise), or
+        None for no LCD at all. buzzer: an Output, or None."""
         self._lcd_factory = lcd_factory
         self._buzzer = buzzer
         self._temperature_sensors = temperature_sensors[: lines - 1]
@@ -68,6 +69,8 @@ class Display:
             time.sleep(seconds)
 
     def _connect(self):
+        if self._lcd_factory is None:
+            return  # no display in the config; the controller runs without one
         try:
             self._lcd = self._lcd_factory()
         except Exception as error:

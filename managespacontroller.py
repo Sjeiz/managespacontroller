@@ -67,6 +67,21 @@ def read_secrets():
     return {}
 
 
+def make_lcd_factory(config, lines):
+    """None without a display section in the config: then there is no LCD."""
+    if not config:
+        return None
+    address = config.get("i2c_address", "0x27")
+    address = int(address, 16) if isinstance(address, str) else int(address)
+    bus = int(config.get("i2c_bus", 1))
+    return lambda: liquidcrystal_i2c.LiquidCrystal_I2C(address, bus, numlines=lines)
+
+
+def build_spa_entity(cls, config, *extra):
+    """A spa entity takes its unique_id from its own config block, like every other entity."""
+    return cls(config["unique_id"], config, *extra)
+
+
 def build_entities(config):
     entities = {}
     for uid, cfg in config["gpios"].items():
@@ -173,18 +188,21 @@ def main():
     publisher.timestamp = timestamp
 
     spa_config = config["spa"]
-    session_switch = SessionSwitch("spa_session", spa_config["session_switch"])
-    operation_sensor = OperationSensor("spa_operation", spa_config["operation_sensor"])
+    session_switch = build_spa_entity(SessionSwitch, spa_config["session_switch"])
+    operation_sensor = build_spa_entity(OperationSensor, spa_config["operation_sensor"])
     monitors = [e for e in entities.values() if isinstance(e, Monitor)]
-    status_sensor = StatusSensor("spa_status", spa_config["status_sensor"], monitors)
-    response_sensor = ResponseSensor("spa_response", spa_config["response_sensor"])
+    status_sensor = build_spa_entity(StatusSensor, spa_config["status_sensor"], monitors)
+    response_sensor = build_spa_entity(ResponseSensor, spa_config["response_sensor"])
     spa = Spa(spa_config, entities, session_switch, operation_sensor, status_sensor, response_sensor, publisher)
 
     temperature_sensors = [e for e in entities.values() if isinstance(e, TemperatureSensor)]
+    display_config = config.get("display", {})
+    display_lines = int(display_config.get("lines", 4))
     display = Display(
-        lambda: liquidcrystal_i2c.LiquidCrystal_I2C(0x27, 1, numlines=4),
-        entities.get("spa_buzzer"),  # optional: the display runs without it
+        make_lcd_factory(display_config, display_lines),
+        entities.get(display_config.get("buzzer", "")),  # optional: it runs without one
         temperature_sensors,
+        lines=display_lines,
     )
     display.message(["Program started!"])
 

@@ -251,6 +251,7 @@
 	},
 	"spa": {
 		"session_switch": {
+			"unique_id": "spa_session",
 			"name": "Spa Session",
 			"device_class": "switch",
 			"config_topic": "homeassistant/switch/spa-controller/spa_session/config",
@@ -260,16 +261,19 @@
 			"payload_off": "off"
 		},
 		"operation_sensor": {
+			"unique_id": "spa_operation",
 			"name": "Spa Operation",
 			"config_topic": "homeassistant/sensor/spa-controller/spa_operation/config",
 			"state_topic": "spa-controller/spa_operation"
 		},
 		"status_sensor": {
+			"unique_id": "spa_status",
 			"name": "Spa Status",
 			"config_topic": "homeassistant/sensor/spa-controller/spa_status/config",
 			"state_topic": "spa-controller/spa_status"
 		},
 		"response_sensor": {
+			"unique_id": "spa_response",
 			"name": "Spa Response",
 			"config_topic": "homeassistant/sensor/spa-controller/spa_response/config",
 			"state_topic": "spa-controller/spa_response"
@@ -281,6 +285,12 @@
 			"22:00"
 		],
 		"status_log_secs": 60
+	},
+	"display": {
+		"i2c_address": "0x27",
+		"i2c_bus": 1,
+		"lines": 4,
+		"buzzer": "spa_buzzer"
 	},
 	"web": {
 		"port": 80

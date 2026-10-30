@@ -56,10 +56,10 @@ pins_after_setup = dict(GPIO.pins)  # no relay may change level between setup an
 pub = FakePublisher()
 sc = config["spa"]
 monitors = [e for e in entities.values() if isinstance(e, Monitor)]
-spa = Spa(sc, entities, SessionSwitch("spa_session", sc["session_switch"]),
-          OperationSensor("spa_operation", sc["operation_sensor"]),
-          StatusSensor("spa_status", sc["status_sensor"], monitors),
-          ResponseSensor("spa_response", sc["response_sensor"]), pub)
+spa = Spa(sc, entities, mc.build_spa_entity(SessionSwitch, sc["session_switch"]),
+          mc.build_spa_entity(OperationSensor, sc["operation_sensor"]),
+          mc.build_spa_entity(StatusSensor, sc["status_sensor"], monitors),
+          mc.build_spa_entity(ResponseSensor, sc["response_sensor"]), pub)
 status = spa.status_sensor
 response = spa.response_sensor
 O = spa.outputs
@@ -334,6 +334,22 @@ spa.handle_reading("spa_water_level", entities["spa_water_level"].measure())
 spa.tick(t + 23, W2)
 dd.update(spa, 401.0)
 check("no display: buzzer off after fault cleared", not entities["spa_buzzer"].is_on)
+
+# No display section in the config: no LCD factory, no buzzer, and nothing raises
+check("no display section: no LCD factory", mc.make_lcd_factory({}, 4) is None)
+check("display section: the i2c address is read as hexadecimal",
+      mc.make_lcd_factory({"i2c_address": "0x27"}, 4) is not None)
+try:
+    nd = Display(mc.make_lcd_factory({}, 4), None, temps)
+    nd.message(["Program started!"])
+    nd.update(spa, 402.0)
+    nd.beep(times=1, seconds=0)
+    nd.error("something")
+    nd.update(spa, 403.0)
+    ok = True
+except Exception:
+    ok = False
+check("no display section: the controller runs without LCD and without buzzer", ok)
 
 blcd = BreakingLCD()
 dd._lcd_factory = lambda: blcd
