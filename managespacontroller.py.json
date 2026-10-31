@@ -280,9 +280,9 @@
 		},
 		"stagger_secs": 1,
 		"maintenance_times": [
-			"06:00",
-			"14:00",
-			"22:00"
+			"04:00",
+			"15:00",
+			"23:00"
 		],
 		"status_log_secs": 60
 	},
