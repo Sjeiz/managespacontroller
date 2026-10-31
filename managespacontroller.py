@@ -202,6 +202,7 @@ def main():
         make_lcd_factory(display_config, display_lines),
         entities.get(display_config.get("buzzer", "")),  # optional: it runs without one
         temperature_sensors,
+        columns=int(display_config.get("columns", 20)),
         lines=display_lines,
     )
     display.message(["Program started!"])

@@ -77,7 +77,8 @@ The tests read `managespacontroller.py.json` and assume its current values. A ch
 - frost monitor below 4 °C on `spa_temp_3` with `force_on: spa_heatpump` and `unknown_active` switched on;
 - monitor order water, temperature, frost with warnings `WaterLow`, `TempHigh`, `Frost` (Spa Status priority);
 - water level input on pin 23 with `gpio_on: 1`, power output on pin 26 (active low), settle time 0.5 s and a measuring interval of 60 s;
-- heat pump on pin 17 (on = high, because its channel drives the power relay through its break contact), pump 1 on pin 22 (active low).
+- heat pump on pin 17 (on = high, because its channel drives the power relay through its break contact), pump 1 on pin 22 (active low);
+- a display of 20 columns by 4 lines with `spa_buzzer` as its buzzer (the LCD checks count the characters on a line).
 
 ## What is not covered
 
