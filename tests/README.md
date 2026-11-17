@@ -72,7 +72,7 @@ The tests read `managespacontroller.py.json` and assume its current values. A ch
 
 - which outputs take part in a session (circulation, pumps 1-3, lights) and in a maintenance run (circulation, pumps 1-3, blower);
 - stagger delay 1 s, and run times of 30 s for pumps 1-3 and the blower against 3600 s for the circulation output, which therefore ends the run;
-- maintenance times `04:00`, `15:00` and `23:00` (the fault check uses `23:00` to verify that a maintenance time during a fault does nothing);
+- maintenance times `01:00` and `13:00` (a time fires once per date and minute, so the scenarios that reuse a time run on a later date; the fault check uses `01:00` to verify that a maintenance time during a fault does nothing);
 - temperature monitor limit 40 °C with hysteresis 0.5 °C;
 - frost monitor below 4 °C on `spa_temp_3` with `force_on: spa_heatpump` and `unknown_active` switched on;
 - monitor order water, temperature, frost with warnings `WaterLow`, `TempHigh`, `Frost` (Spa Status priority);
